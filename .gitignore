@@ -1,0 +1,7 @@
+.vscode/**
+
+*.bat
+debug/**
+output/**
+secrets/apikey.txt
+secrets/cookie.txt
