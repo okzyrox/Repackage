@@ -1,4 +1,4 @@
-# PackageManager
+# Repackage
 
 Experimental
 
@@ -7,9 +7,8 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
 ## Todo
 
 - [x] Generate package map for a given package (asset)
-- [ ] Generate a matching* map for a given directorry
-    - just need to fix matching of upper directory
-- [ ] Compare mappings for changes
+- [x] Generate a matching map for a given directory
+- [x] Compare mappings for changes
 - [ ] Publishing to package
     - [ ] All / Specified
     - [ ] Package version notes

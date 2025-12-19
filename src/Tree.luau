@@ -8,6 +8,8 @@ local fs = require("@lune/fs")
 local roblox = require("@lune/roblox")
 local serde = require("@lune/serde")
 
+local Util = require("./Util")
+
 --// Types
 
 export type ScriptNode = LocalScript | Script | ModuleScript
@@ -18,6 +20,14 @@ export type TreeNode = {
 	content: string?, --/ either file source code or meta content
 	children: {TreeNode}?,
 	packageAssetId: string?, --/ only for uppermost
+}
+
+export type TreeComparisonResult = {
+    added: {{path: string, node: TreeNode}},
+    removed: {{path: string, node: TreeNode}},
+    modified: {{path: string, node: TreeNode, oldContent: string?}},
+    moved: {{oldPath: string, newPath: string, node: TreeNode}},
+	anyChanges: boolean
 }
 
 --// Constants
@@ -58,11 +68,37 @@ function Tree.getInstanceProperties(instance: Instance): {[string]: any}
 	return properties
 end
 
-function Tree.constructInstanceTreeFromInstance(instance: Instance): TreeNode
+function Tree.constructInstanceTreeFromInstance(instance: Instance | {Instance}, packageName: string?, packageAssetId: string?): TreeNode
+	if typeof(instance) == "table" then
+		if #instance == 0 then
+			error("Instance array is empty")
+		end
+		return {
+			type = "directory",
+			name = packageName or "PackageRoot",
+			packageAssetId = packageAssetId,
+			children = (function()
+				local children = {}
+				for _, inst in instance do
+					local treeSuccess, tree = pcall(function()
+						return Tree.constructInstanceTreeFromInstance(inst)
+					end)
+					if treeSuccess then
+						table.insert(children, tree)
+					else
+						warn("Could not construct instance tree for instance:", inst.Name)
+						print(tree)
+					end
+				end
+				return children
+			end)()
+		}
+	end
+
     local children = instance:GetChildren()
     local isScript = SCRIPT_EXTENSIONS[instance.ClassName] ~= nil
     local extension = SCRIPT_EXTENSIONS[instance.ClassName] or ".meta.json"
-    
+
     if #children == 0 then
         if isScript then
             return {
@@ -76,6 +112,22 @@ function Tree.constructInstanceTreeFromInstance(instance: Instance): TreeNode
                 name = instance.Name,
                 children = {}
             }
+		-- hack until we can handle userdata better
+		-- although with Content in specific its gonna be a pain; especially with recreating the package
+		elseif instance.ClassName == "Sound" then
+			return {
+				type = "file",
+				name = instance.Name .. ".meta.json",
+				content = serde.encode("json", {
+					className = instance.ClassName,
+					properties = {
+						SoundId = (instance :: Sound).AudioContent.Uri,
+						Volume = (instance :: Sound).Volume,
+						Looped = (instance :: Sound).Looped,
+						Playing = (instance :: Sound).Playing,
+					}
+				})
+			}
         else
             return {
                 type = "file",
@@ -97,20 +149,36 @@ function Tree.constructInstanceTreeFromInstance(instance: Instance): TreeNode
                 content = (instance :: ScriptNode).Source
             })
         elseif instance.ClassName ~= "Folder" then
+			local success, props = pcall(function()
+				return Tree.getInstanceProperties(instance)
+			end)
+
+			if not success then
+				warn("Failed to get properties for instance: ", instance.Name)
+				props = {}
+			end
+
             table.insert(dirChildren, {
                 type = "file",
                 name = "init.meta.json",
                 content = serde.encode("json", {
                     -- Name = instance.Name,
                     className = instance.ClassName,
-                    properties = Tree.getInstanceProperties(instance)
+                    properties = props
 					
                 })
             })
         end
 
         for _, child in children do
-            table.insert(dirChildren, Tree.constructInstanceTreeFromInstance(child))
+			local nodeSuccess, node = pcall(function()
+				return Tree.constructInstanceTreeFromInstance(child)
+			end)
+			if not nodeSuccess then
+				print("Could not construct instance tree for child:", child.Name, child.ClassName)
+				continue
+			end
+            table.insert(dirChildren, node)
         end
 
         return {
@@ -180,6 +248,7 @@ end
 function Tree.writeInstanceTreeToFS(tree: any, basePath: string)
 	if tree.type == "directory" then
 		local dirPath = basePath .. "/" .. tree.name
+		Util.dprint("Writing: ", dirPath)
 		fs.writeDir(dirPath)
 		
 		for _, child in tree.children do
@@ -187,8 +256,223 @@ function Tree.writeInstanceTreeToFS(tree: any, basePath: string)
 		end
 	elseif tree.type == "file" then
 		local filePath = basePath .. "/" .. tree.name
+		Util.dprint("Writing: ", filePath)
 		fs.writeFile(filePath, tree.content)
 	end
 end
+
+function Tree.constructInstanceFromTreeNode(node: TreeNode): Instance
+	if node.type == "directory" then
+		local initScriptNode: TreeNode? = nil
+		if node.children then
+			for index, childNode in node.children do
+				if childNode.name == "init.client.luau" or childNode.name == "init.server.luau" or childNode.name == "init.luau" then
+					initScriptNode = childNode
+					table.remove(node.children, index)
+					break
+				end
+			end
+		end
+
+		if initScriptNode then
+			local scriptClassName = Util.getScriptTypeFromName(initScriptNode.name)
+			if scriptClassName then
+				local scriptInstance = roblox.Instance.new(scriptClassName)
+				scriptInstance.Name = node.name
+				scriptInstance.Source = initScriptNode.content or ""
+				
+				if node.children then
+					for _, childNode in node.children do
+						local childInstance = Tree.constructInstanceFromTreeNode(childNode)
+						childInstance.Parent = scriptInstance
+					end
+				end
+				
+				return scriptInstance
+			else
+				error("Invalid init script node for directory: " .. node.name)
+			end
+		else
+			local folder = roblox.Instance.new("Folder")
+			folder.Name = node.name
+			
+			if node.children then
+				for _, childNode in node.children do
+					local childInstance = Tree.constructInstanceFromTreeNode(childNode)
+					childInstance.Parent = folder
+				end
+			end
+			
+			return folder
+		end
+	elseif node.type == "file" then
+		if node.name:find(".meta.json") then
+			local metaJson = serde.decode("json", node.content or "{}")
+			local className = metaJson["className"] or "Folder"
+			local instance = roblox.Instance.new(className)
+			instance.Name = node.name:gsub("%.meta%.json$", "") -- filter for meta
+			
+			local properties = metaJson["properties"] or {}
+			for propName, propValue in properties do
+				pcall(function()
+					instance[propName] = propValue
+				end)
+			end
+			
+			return instance
+		else
+			local isScript = false
+			local scriptClassName = ""
+			
+			for className, extension in SCRIPT_EXTENSIONS do
+				if node.name:find(extension .. "$") then -- filter
+					isScript = true
+					scriptClassName = className
+					break
+				end
+			end
+			
+			if isScript then
+				local scriptInstance = roblox.Instance.new(scriptClassName)
+				scriptInstance.Name = node.name:gsub("%..-$", "")
+				scriptInstance.Source = node.content or ""
+				return scriptInstance
+			else
+				error("Unknown file type for node: " .. node.name)
+			end
+		end
+	else
+		error("Unknown TreeNode type: " .. tostring(node.type))
+	end
+end
+
+function Tree.constructPackageFromTree(tree: TreeNode): {Instance}
+	local instances: {Instance} = {}
+
+	if tree.type ~= "directory" then
+		error("Root of the tree must be a directory, misconfigured tree?")
+	end
+
+	if tree.children then
+		for _, child in tree.children do
+			local instance = Tree.constructInstanceFromTreeNode(child)
+			table.insert(instances, instance)
+		end
+	end
+
+	return instances
+end
+
+function Tree.compareTrees(oldTree: TreeNode, newTree: TreeNode): TreeComparisonResult
+    local result: TreeComparisonResult = {
+        added = {},
+        removed = {},
+        modified = {},
+        moved = {},
+		anyChanges = false
+    }
+
+    local oldMap: {[string]: TreeNode} = {}
+    local newMap: {[string]: TreeNode} = {}
+
+    local function flattenNode(node: TreeNode, path: string, treeMap: {[string]: TreeNode})
+        local currentPath = path == "" and node.name or (path .. "/" .. node.name)
+        treeMap[currentPath] = node
+        if node.children then
+            for _, child in node.children do
+                flattenNode(child, currentPath, treeMap)
+            end
+        end
+    end
+
+    flattenNode(oldTree, "", oldMap)
+    flattenNode(newTree, "", newMap)
+
+    local maybeRemoves: {{path: string, node: TreeNode}} = {}
+    local maybeAdds: {{path: string, node: TreeNode}} = {}
+
+    for path, oldNode in oldMap do
+        local newNode = newMap[path]
+        if not newNode then
+            table.insert(maybeRemoves, {path = path, node = oldNode})
+        else
+            local changed = false
+            if oldNode.type ~= newNode.type then
+                changed = true
+            elseif oldNode.type == "file" then
+                if oldNode.content ~= newNode.content then
+                    changed = true
+                end
+            elseif oldNode.type == "directory" then
+                if oldNode.packageAssetId ~= newNode.packageAssetId then
+                    changed = true
+                end
+            end
+
+            if changed then
+                table.insert(result.modified, {path = path, node = newNode, oldContent = oldNode.content})
+				result.anyChanges = true
+            end
+        end
+    end
+
+    for path, newNode in newMap do
+        if not oldMap[path] then
+            table.insert(maybeAdds, {path = path, node = newNode})
+			result.anyChanges = true
+        end
+    end
+
+    local usedAdds = {}
+
+    for _, rem in maybeRemoves do
+        local foundMove = false
+        for i, add in maybeAdds do
+            if usedAdds[i] then continue end
+            
+            if rem.node.name == add.node.name and rem.node.type == add.node.type then
+                local contentMatch = true
+                if rem.node.type == "file" then
+                    contentMatch = rem.node.content == add.node.content
+                end
+                
+                if contentMatch then
+                    table.insert(result.moved, {
+                        oldPath = rem.path,
+                        newPath = add.path,
+                        node = add.node
+                    })
+                    usedAdds[i] = true
+                    foundMove = true
+					result.anyChanges = true
+                    break
+                end
+            end
+        end
+        
+        if not foundMove then
+            table.insert(result.removed, rem)
+        end
+    end
+
+    for i, add in maybeAdds do
+        if not usedAdds[i] then
+            table.insert(result.added, add)
+			result.anyChanges = true
+        end
+    end
+
+    return result
+end
+
+-- function Tree.compareTreesPackages(oldTreePackage: Instance | {Instance}, newTreePackage: Instance | {Instance}): TreeComparisonResult
+-- 	local result: TreeComparisonResult = {
+-- 		added = {},
+-- 		removed = {},
+-- 		modified = {}
+-- 	}
+
+-- 	return result
+-- end
 
 return Tree

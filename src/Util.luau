@@ -3,29 +3,53 @@
 --// Author: okzyrox
 --/ Date: 2025/12/18
 
---// Vars
-local DebugMode = false
-
 --// Module
 
 local Util = {}
-Util.DebugMode = DebugMode
+Util.DebugMode = false
 
 function Util.dprint(...)
-	if not DebugMode then
+	if not Util.DebugMode then
 		return
 	end
 	print(...)
 end
 
+local PrintExtraProperties = {
+	["Animation"] = {"AnimationId"},
+}
+
 function Util.printInstance(instance: Instance, indent: string)
 	print(indent .. instance.Name .. " (" .. instance.ClassName .. ")")
+	local extraProps = PrintExtraProperties[instance.ClassName]
+	if extraProps then
+		for _, propName in extraProps do
+			local success, value = pcall(function()
+				return instance[propName]
+			end)
+			if success and value then
+				print(indent .. "  |" .. propName .. " = " .. tostring(value))
+			end
+		end
+	end
 
 	local Children = instance:GetChildren()
 	if #Children > 0 then
 		for _, child in Children do
 			Util.printInstance(child, indent .. "  ")
 		end
+	end
+end
+
+function Util.getScriptTypeFromName(fileName: string): string?
+	if fileName:find("%.client%.luau$") then
+		return "LocalScript"
+	elseif fileName:find("%.server%.luau$") then
+		return "Script"
+	elseif fileName:find("%.luau$") then
+		return "ModuleScript"
+	else
+		return nil
 	end
 end
 
