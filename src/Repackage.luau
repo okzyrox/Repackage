@@ -15,12 +15,19 @@ local API = require("./API")
 local Util = require("./Util")
 local Config = require("./Config")
 
+local colored = require("./Lib/colored")
+
 --// Types
 
 type Command = {
 	args: {string},
+	desc: string?,
 	func: (...any) -> ()
 }
+
+--// Constants
+
+local COMMAND_LIST_PADDING = 12
 
 --// Functions
 
@@ -79,6 +86,7 @@ local function getPackageTree(assetId: string): (string?, any?)
 		return nil
 	end
 	local packageName: string = meta["displayName"]
+	local packageRevisionId: string = meta["revisionId"]
 	local content: any? = getPackageContent(assetId)
 	if content then
 		local dataLocation = content["location"]
@@ -106,9 +114,9 @@ local function getPackageTree(assetId: string): (string?, any?)
 			print("No instances found in the package content for assetId:", assetId)
 			return nil
 		end
-		
+
 		local treeSuccess, tree = pcall(function()
-			return Tree.constructInstanceTreeFromInstance(deserializedPackage, packageName, assetId)
+			return Tree.constructInstanceTreeFromInstance(deserializedPackage, packageName, assetId, packageRevisionId)
 		end)
 
 		if not treeSuccess then 
@@ -146,9 +154,9 @@ local function getPackageVersions(assetId: string): any?
 	end
 end
 
-local function getPackageChanges(packageName: string): (boolean, Tree.TreeComparisonResult?)
+local function getPackageChanges(packageName: string): (boolean, Tree.TreeComparisonResult?, Tree.TreeState?)
 	local outDir = Config.get("outputDirectory")
-	local packagePath = outDir .. packageName
+	local packagePath = Util.joinPathParts(outDir, packageName)
 	if not fs.isDir(packagePath) then
 		warn("Package not found at path:", packagePath)
 		return false
@@ -167,11 +175,81 @@ local function getPackageChanges(packageName: string): (boolean, Tree.TreeCompar
 		return false
 	end
 
+	local state: Tree.TreeState = "Unchanged"
+
 	local changes = Tree.compareTrees(treeCurrent, treeNew)
 	if changes.anyChanges == false then
-		return false, nil
+		if tonumber(treeCurrent.packageRevisionId) > tonumber(treeNew.packageRevisionId) then
+			state = "Outdated"
+		end
+
+		return false, nil, state
 	else
-		return true, changes
+		if #changes.added > 0 or #changes.removed > 0 then
+			state = "Modified"
+		else
+			state = "Unchanged"
+		end
+
+		if tonumber(treeCurrent.packageRevisionId) > tonumber(treeNew.packageRevisionId) then
+			state = "Outdated"
+		end
+
+		return true, changes, state
+	end
+end
+
+local function publishToPackage(packageName: string, revisionNote: string?): API.PUBLISH_STATE
+	local outDir = Config.get("outputDirectory")
+	local packagePath = Util.joinPathParts(outDir, packageName)
+	if not fs.isDir(packagePath) then
+		warn("Package not found at path:", packagePath)
+		return "FAILED"
+	end
+
+	local changes, _c, _s = getPackageChanges(packageName)
+	if changes == false then
+		print("No changes to publish for package:", packageName)
+		return "NO-CHANGES"
+	end
+
+	local tree = Tree.constructInstanceTreeFromDirectory(packagePath)
+	local package = Tree.constructPackageFromTree(tree)
+
+	local serializedPackage = roblox.serializeModel(package)
+
+	local statusCode, response = API.makeAdvRequest(
+		"https://apis.roblox.com/assets/v1/assets/" .. (tree.packageAssetId :: string),
+		API.URLS.UPDATE_CONTENT.method,
+		{ 
+			["Content-Type"] = API.PACKAGE_CONTENT_TYPE 
+		},
+		nil,
+		{
+			request = serde.encode("json", {
+				["assetId"] = tonumber(tree.packageAssetId),
+			}),
+			fileContent = serializedPackage
+		}
+
+	)
+
+	print(response)
+
+	if statusCode == 200 then
+		local jsonResponse = serde.decode("json", response)
+		local taskDone = jsonResponse["done"] or false
+
+		if taskDone == false then
+			print("Submitted package to publish")
+		else
+			print("Package published")
+		end
+
+		return "SUCCESS"
+	else
+		warn("Failed to publish package:", packageName, "Status Code:", statusCode, "Response:", response)
+		return "FAILED"
 	end
 end
 
@@ -189,15 +267,17 @@ local function create(assetId: string)
 	end
 	
 	Tree.writeInstanceTreeToFS(tree, outDir)
-	local outDirPackage = outDir .. "/" .. packageName
+	local outDirPackage = Util.joinPathParts(outDir, packageName)
 
-	fs.writeFile(outDirPackage .. "/package.json", serde.encode("json", tree, true))
+	local packageMetaFile = Util.joinPathParts(outDirPackage, Tree.PACKAGE_META_FILE_PATH)
+
+	fs.writeFile(packageMetaFile, serde.encode("json", tree, true))
 	print("Package extracted to:", outDirPackage)
 end
 
 local function getPackageInfo(packageName: string)
 	local outDir = Config.get("outputDirectory")
-	local packagePath = outDir .. packageName
+	local packagePath = Util.joinPathParts(outDir, packageName)
 	if not fs.isDir(packagePath) then
 		warn("Package not found at path:", packagePath)
 		return
@@ -205,17 +285,22 @@ local function getPackageInfo(packageName: string)
 
 	local tree = Tree.constructInstanceTreeFromDirectory(packagePath)
 
-	print("Details:")
+	print(colored("Details:", "green"))
 	print(" Package Name: " .. tree.name)
 	if tree.packageAssetId then
 		print(" Package Asset ID: " .. tree.packageAssetId)
 	else
 		print(" Package Asset ID: N/A")
 	end
+	if tree.packageRevisionId then
+		print(" Package Revision ID: " .. tree.packageRevisionId)
+	else
+		print(" Package Revision ID: N/A")
+	end
 	print(" Root Path: " .. packagePath)
 
 	local package = Tree.constructPackageFromTree(tree)
-	print("Contents:")
+	print(colored("Contents:", "cyan"))
 	for i, packageItem in package do
 		stdio.write("[" .. i .. "]")
 		Util.printInstance(packageItem, " ")
@@ -245,43 +330,59 @@ local function getPackageRevisions(assetId: string)
 
 	print("Revisions for ", meta["displayName"])
 	for _, versionInfo in assetVersions do
-		print(" ID: " .. versionInfo.revisionId .. " | Date: " .. versionInfo.revisionDate)
+		print(colored(" ID: " .. versionInfo.revisionId .. " | Date: " .. versionInfo.revisionDate, "light_grey"))
 	end
 end
 
 local function getPackageDiff(packageName: string)
-	local anyChanges, changes = getPackageChanges(packageName)
+	local anyChanges, changes, state = getPackageChanges(packageName)
+
+	if state == "Outdated" then
+		print(colored("Local package is outdated, update by re-downloading.", "yellow"))
+	end
 
 	if anyChanges == false then
-		print("No changes")
+		print(colored("No changes", "grey"))
 	else
+		if state == "Modified" then
+			print("Local package has been modified.")
+		end
 		if #changes.added > 0 then
 			print("Added:")
 			for _, added in changes.added do
-				print(" + " .. added.path)
+				print(colored(" + " .. added.path, "green"))
 			end
 		end
 
 		if #changes.removed > 0 then
 			print("Removed:")
 			for _, removed in changes.removed do
-				print(" - " .. removed.path)
+				print(colored(" - " .. removed.path, "red"))
 			end
 		end
 
 		if #changes.modified > 0 then
 			print("Modified:")
 			for _, modified in changes.modified do
-				print(" * " .. modified.path)
+				print(colored(" * " .. modified.path, "yellow"))
 			end
 		end
 
 		if #changes.moved > 0 then
 			print("Moved:")
 			for _, moved in changes.moved do
-				print(" * " .. moved.oldPath .. " -> " .. moved.newPath)
+				print(colored(" * " .. moved.oldPath, "red") .. " -> " .. colored(moved.newPath, "green"))
 			end
 		end
+	end
+end
+
+local function publish(packageName: string)
+	local publishStatus = publishToPackage(packageName)
+	if publishStatus == "SUCCESS" then
+		print(colored("Package published successfully: " .. packageName, "green"))
+	elseif publishStatus == "FAILED" then
+		print(colored("Failed to publish package: " .. packageName, "red"))
 	end
 end
 
@@ -299,25 +400,54 @@ local function setup()
 	print("Setup current working directory for use with Repackager")
 end
 
+local function showHelp(commands)
+	print(colored("Repackage - Package Manager", "light_cyan", nil, {"bold"}))
+	print(colored("Usage: Repackage.luau <command> [args...]", "light_magenta", nil, {"bold"}))
+	print(colored("Commands:", "light_cyan", nil, {"bold"}))
+	for commandName, commandData in commands do
+		stdio.write("  " .. colored(commandName, "light_green", nil, {"underline"}))
+		if commandData.desc then
+			local i = 0
+			while i < (COMMAND_LIST_PADDING - #commandName) do
+				stdio.write(" ")
+				i += 1
+			end
+			stdio.write(colored(commandData.desc, "light_yellow") .. "\n")
+		else
+			stdio.write("\n")
+		end
+	end
+end
+
 local Commands: {[string]: Command} = {
 	setup = {
 		args = {},
+		desc = "Setup the current folder for Repackager usage",
 		func = setup
 	},
 	create = {
 		args = {"Package Asset ID"},
+		desc = "Create a package onto the filesystem from a package asset",
 		func = create
+	},
+	publish = {
+		args = {"Package Name"},
+		desc = "Publish local package changes to the package asset (UNFINISHED)",
+		func = publish
 	},
 	info = {
 		args = {"Package Name"},
+		desc = "Get information about a local package",
 		func = getPackageInfo
 	},
 	revisions = {
 		args = {"Package Asset ID"},
+		desc = "List revisions for a package asset",
 		func = getPackageRevisions
 	},
 	diff = {
 		args = {"Package Name"},
+		desc = "Get differences between local package and the current uploaded package asset",
 		func = getPackageDiff
 	},
 	debug = {
@@ -331,19 +461,13 @@ local function main()
 	Util.DebugMode = Config.getOrDefault("debugLogs")
 
 	if not (#process.args > 0) then
-		print("Repackage - Package Manager")
-		print("Usage: Repackage.luau <command> [args...]")
-		print("Commands:")
-		for commandName, commandData in Commands do
-			local argsStr = table.concat(commandData.args, "> <")
-			print("  " .. commandName .. " <" .. argsStr .. ">")
-		end
+		showHelp(Commands)
 		return
 	elseif process.args[1] == nil then
-		warn("No command provided!")
+		print(colored("No command provided!", "yellow"))
 		return
 	elseif not Commands[process.args[1]] then
-		warn("Unknown command: " .. process.args[1])
+		print(colored("Unknown command: " .. process.args[1], "yellow"))
 		return
 	else
 		local commandName = process.args[1]
@@ -352,7 +476,9 @@ local function main()
 		for i = 1, #commandData.args do
 			local argValue = process.args[i + 1]
 			if not argValue then
-				warn("Missing argument <" .. commandData.args[i] .. "> for '" .. commandName .. "'")
+				--/ amazing formatting
+				local argMsg = `{colored("Missing argument: ", "yellow")}{colored(commandData.args[i], "light_green")}{colored(" for ", "yellow")}{colored(commandName, "light_magenta")}`
+				print(argMsg)
 				return
 			end
 			table.insert(commandArgs, argValue)

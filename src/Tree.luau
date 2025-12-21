@@ -10,6 +10,7 @@ local serde = require("@lune/serde")
 
 local Util = require("./Util")
 
+local DMPLib = require("./Lib/diff_match_patch")
 --// Types
 
 export type ScriptNode = LocalScript | Script | ModuleScript
@@ -19,7 +20,10 @@ export type TreeNode = {
 	name: string,
 	content: string?, --/ either file source code or meta content
 	children: {TreeNode}?,
-	packageAssetId: string?, --/ only for uppermost
+
+	--/ only for uppermost meta package:
+	packageAssetId: string?, --/ refers to the corresponding asset
+	packageRevisionId: string?, --/ refers to the revision id of when the package was last updated
 }
 
 export type TreeComparisonResult = {
@@ -29,6 +33,8 @@ export type TreeComparisonResult = {
     moved: {{oldPath: string, newPath: string, node: TreeNode}},
 	anyChanges: boolean
 }
+
+export type TreeState = "Unchanged" | "Outdated" | "Modified"
 
 --// Constants
 local DB = roblox.getReflectionDatabase()
@@ -45,9 +51,12 @@ local SCRIPT_EXTENSIONS = {
 	["ModuleScript"] = ".luau",
 }
 
+local PACKAGE_META_FILE = "repackage.json"
+
 --// Module
 
 local Tree = {}
+Tree.PACKAGE_META_FILE_PATH = PACKAGE_META_FILE
 
 function Tree.getInstanceProperties(instance: Instance): {[string]: any}
 	local properties: {[string]: any} = {}
@@ -68,7 +77,7 @@ function Tree.getInstanceProperties(instance: Instance): {[string]: any}
 	return properties
 end
 
-function Tree.constructInstanceTreeFromInstance(instance: Instance | {Instance}, packageName: string?, packageAssetId: string?): TreeNode
+function Tree.constructInstanceTreeFromInstance(instance: Instance | {Instance}, packageName: string?, packageAssetId: string?, packageRevisionId: string?): TreeNode
 	if typeof(instance) == "table" then
 		if #instance == 0 then
 			error("Instance array is empty")
@@ -77,6 +86,7 @@ function Tree.constructInstanceTreeFromInstance(instance: Instance | {Instance},
 			type = "directory",
 			name = packageName or "PackageRoot",
 			packageAssetId = packageAssetId,
+			packageRevisionId = packageRevisionId,
 			children = (function()
 				local children = {}
 				for _, inst in instance do
@@ -92,7 +102,7 @@ function Tree.constructInstanceTreeFromInstance(instance: Instance | {Instance},
 				end
 				return children
 			end)()
-		}
+		} :: TreeNode
 	end
 
     local children = instance:GetChildren()
@@ -203,7 +213,7 @@ function Tree.constructInstanceTreeFromDirectory(dirPath: string): TreeNode
 		if fs.isDir(childPath) then
 			table.insert(dirChildren, Tree.constructInstanceTreeFromDirectory(childPath))
 		else
-			if childPath:find("package.json") then
+			if childPath:find(PACKAGE_META_FILE) then
 				continue
 			end
 			local content = fs.readFile(childPath)
@@ -227,11 +237,14 @@ function Tree.constructInstanceTreeFromDirectory(dirPath: string): TreeNode
 	end
 
 	local packageAssetId: string? = nil
+	local packageRevisionId: string? = nil
 
-	if fs.isFile(dirPath .. "/package.json") then
-		local packageData = fs.readFile(dirPath .. "/package.json")
+	local packageMetaPath = Util.joinPathParts(dirPath, PACKAGE_META_FILE)
+	if fs.isFile(packageMetaPath) then
+		local packageData = fs.readFile(packageMetaPath)
 		local packageJson = serde.decode("json", packageData)
 		packageAssetId = packageJson["packageAssetId"]
+		packageRevisionId = packageJson["packageRevisionId"]
 	end
 
 	local nameParts = dirPath:split("/")
@@ -241,13 +254,14 @@ function Tree.constructInstanceTreeFromDirectory(dirPath: string): TreeNode
 		type = "directory",
 		name = lastPart,
 		packageAssetId = packageAssetId,
+		packageRevisionId = packageRevisionId,
 		children = dirChildren
 	}
 end
 
 function Tree.writeInstanceTreeToFS(tree: any, basePath: string)
 	if tree.type == "directory" then
-		local dirPath = basePath .. "/" .. tree.name
+		local dirPath = Util.joinPathParts(basePath, tree.name)
 		Util.dprint("Writing: ", dirPath)
 		fs.writeDir(dirPath)
 		
@@ -255,7 +269,7 @@ function Tree.writeInstanceTreeToFS(tree: any, basePath: string)
 			Tree.writeInstanceTreeToFS(child, dirPath)
 		end
 	elseif tree.type == "file" then
-		local filePath = basePath .. "/" .. tree.name
+		local filePath = Util.joinPathParts(basePath, tree.name)
 		Util.dprint("Writing: ", filePath)
 		fs.writeFile(filePath, tree.content)
 	end
@@ -375,8 +389,10 @@ function Tree.compareTrees(oldTree: TreeNode, newTree: TreeNode): TreeComparison
     local oldMap: {[string]: TreeNode} = {}
     local newMap: {[string]: TreeNode} = {}
 
+	local fullDiff: string = ""
+
     local function flattenNode(node: TreeNode, path: string, treeMap: {[string]: TreeNode})
-        local currentPath = path == "" and node.name or (path .. "/" .. node.name)
+        local currentPath = path == "" and node.name or (Util.joinPathParts(path, node.name))
         treeMap[currentPath] = node
         if node.children then
             for _, child in node.children do
@@ -411,6 +427,12 @@ function Tree.compareTrees(oldTree: TreeNode, newTree: TreeNode): TreeComparison
 
             if changed then
                 table.insert(result.modified, {path = path, node = newNode, oldContent = oldNode.content})
+				if Util.DebugMode then
+					local changes = DMPLib.diff_main(oldNode.content or "", newNode.content or "")
+					DMPLib.diff_cleanupSemantic(changes)
+					local patch = DMPLib.patch_toText(DMPLib.patch_make(oldNode.content or "", changes))
+					fullDiff ..= "--- " .. path .. "\n" .. "+++ " .. path .. "\n" .. patch .. "\n\n"
+				end
 				result.anyChanges = true
             end
         end
@@ -450,8 +472,9 @@ function Tree.compareTrees(oldTree: TreeNode, newTree: TreeNode): TreeComparison
             end
         end
         
-        if not foundMove then
+        if foundMove == false then
             table.insert(result.removed, rem)
+			result.anyChanges = true
         end
     end
 
@@ -461,6 +484,11 @@ function Tree.compareTrees(oldTree: TreeNode, newTree: TreeNode): TreeComparison
 			result.anyChanges = true
         end
     end
+
+	if Util.DebugMode then
+		fs.writeFile("packageDiff.diff", fullDiff)
+	end
+	
 
     return result
 end

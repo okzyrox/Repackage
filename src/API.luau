@@ -6,15 +6,17 @@
 --// Modules
 local net = require("@lune/net")
 local fs = require("@lune/fs")
+
 local Util = require("./Util")
 
 --// Types
 export type URLMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
-
 export type URL = {
 	url: string,
 	method: URLMethod,
 }
+
+export type PUBLISH_STATE = "NO-CHANGES" | "SUCCESS" | "FAILED"
 
 --// Constants
 local PACKAGE_CONTENT_TYPE = "model/x-rbxm"
@@ -37,8 +39,12 @@ local URLS: {[string]: URL} = {
 		method = "GET"
 	},
 	UPDATE_CONTENT = {
-		url = "https://apis.roblox.com/assets/v1/assets/{ASSET_ID}/content",
+		url = "https://apis.roblox.com/assets/v1/assets/{ASSET_ID}",
 		method = "PATCH"
+	},
+	GET_OPERATION_RESULT = {
+		url = "https://apis.roblox.com/assets/v1/operations/{OPERATION_ID}",
+		method = "GET"
 	}
 }
 
@@ -49,6 +55,7 @@ local ApiKey: string? = nil
 
 local API = {}
 API.URLS = URLS
+API.PACKAGE_CONTENT_TYPE = PACKAGE_CONTENT_TYPE
 
 function API.getApiKey(): string
 	if ApiKey then
@@ -90,6 +97,54 @@ function API.makeRequest(urlData: URL, replacements: {[string]: string}?, body: 
 		method = urlData.method,
 		url = url,
 		headers = headers,
+		body = body,
+	})
+
+	return response.statusCode, response.body
+end
+
+function API.makeAdvRequest(
+	url: string,
+	method: URLMethod,
+	headers: {[string]: string}?,
+	body: string?,
+	form: {[string]: any}?
+): (number, string)
+	local finalHeaders = {
+		["x-api-key"] = API.getApiKey(),
+	}
+	if not body then
+		body = ""
+	end
+
+	if headers then
+		for key, value in headers do
+			finalHeaders[key] = value
+		end
+	end
+
+	if form then
+		finalHeaders["Content-Type"] = "multipart/form-data"
+
+		local boundary = "----APIFormBoundary" .. tostring(os.clock()):gsub("%.", "")
+		finalHeaders["Content-Type"] = "multipart/form-data; boundary=" .. boundary
+
+		local parts = {}
+
+		for key, value in form do
+			table.insert(parts,
+				"--" .. boundary .. "\r\n" .. 'Content-Disposition: form-data; name="' .. key .. '"\r\n\r\n' .. tostring(value) .. "\r\n"
+			)
+		end
+
+		table.insert(parts, "--" .. boundary .. "--\r\n")
+		body = table.concat(parts)
+	end
+
+	local response = net.request({
+		method = method,
+		url = url,
+		headers = finalHeaders,
 		body = body,
 	})
 

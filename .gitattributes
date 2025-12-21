@@ -1,0 +1,2 @@
+src/Lib/*.lua linguist-vendored
+src/Lib/*.luau linguist-vendored

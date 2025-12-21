@@ -53,4 +53,26 @@ function Util.getScriptTypeFromName(fileName: string): string?
 	end
 end
 
+function Util.joinPathParts(...: string): string
+    local parts = { ... }
+    local result = ""
+
+    for i, part in parts do
+        if type(part) == "string" and part ~= "" then
+            if i > 1 then
+                part = part:gsub("^/+", "")
+            end
+            part = part:gsub("/+$", "")
+
+            if result == "" then
+                result = part
+            else
+                result = result .. "/" .. part
+            end
+        end
+    end
+
+    return result
+end
+
 return Util
