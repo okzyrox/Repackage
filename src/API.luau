@@ -8,6 +8,7 @@ local net = require("@lune/net")
 local fs = require("@lune/fs")
 
 local Util = require("./Util")
+local Config = require("./Config")
 
 --// Types
 export type URLMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
@@ -16,14 +17,14 @@ export type URL = {
 	method: URLMethod,
 }
 
-export type PUBLISH_STATE = "NO-CHANGES" | "SUCCESS" | "FAILED"
-
 --// Constants
-local PACKAGE_CONTENT_TYPE = "model/x-rbxm"
-
 local URLS: {[string]: URL} = {
 	GET_META = {
 		url = "https://apis.roblox.com/assets/v1/assets/{ASSET_ID}",
+		method = "GET"
+	},
+	GET_META_BY_VERSION = {
+		url = "https://apis.roblox.com/assets/v1/assets/{ASSET_ID}/versions/{VERSION_NUMBER}",
 		method = "GET"
 	},
 	GET_CONTENT = {
@@ -55,23 +56,38 @@ local ApiKey: string? = nil
 
 local API = {}
 API.URLS = URLS
-API.PACKAGE_CONTENT_TYPE = PACKAGE_CONTENT_TYPE
 
 function API.getApiKey(): string
 	if ApiKey then
 		return ApiKey
 	end
 
-	if fs.isFile("secrets/apikey.txt") then
-		local fileKey = fs.readFile("secrets/apikey.txt")
+	local keyName: string? = Config.get("secretsFile")
+	if keyName == nil then
+		error("No API Key file was configured!")
+	end
+	local secretsDir: string? = Config.get("secretsDirectory")
+	if secretsDir == nil then
+		error("Configured secrets directory does not exist!")
+	end
+
+	local keyPath = Util.joinPathParts(secretsDir, keyName)
+
+	if fs.isFile(keyPath) then
+		local fileKey = fs.readFile(keyPath)
 		ApiKey = fileKey
 		return fileKey
 	else
-		error("No API key found! Follow instructions in secrets/apikey.txt.template")
+		error("No API key found! Create ")
 	end
 end
 
-function API.makeRequest(urlData: URL, replacements: {[string]: string}?, body: string?, extraHeaders: {[string]: string}?): (number, string)
+function API.makeRequest(
+	urlData: URL, 
+	replacements: {[string]: string}?, 
+	body: string?, 
+	extraHeaders: {[string]: string}?
+): (number, string)
 	local url = urlData.url
 	if replacements then
 		for key, value in replacements do

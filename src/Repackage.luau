@@ -5,258 +5,32 @@
 
 --// Modules
 local fs = require("@lune/fs")
-local roblox = require("@lune/roblox")
 local process = require("@lune/process")
 local serde = require("@lune/serde")
 local stdio = require("@lune/stdio")
 
 local Tree = require("./Tree")
-local API = require("./API")
 local Util = require("./Util")
 local Config = require("./Config")
+local RobloxAPI = require("./RobloxAPI")
 
 local colored = require("./Lib/colored")
 
 --// Types
-
 type Command = {
 	args: {string},
 	desc: string?,
-	func: (...any) -> ()
+	func: (...any) -> ()?
 }
 
 --// Constants
-
 local COMMAND_LIST_PADDING = 12
 
 --// Functions
-
-local function getAssetMeta(assetId: string): string?
-	local statusCode, response = API.makeRequest(
-		API.URLS.GET_META,
-		{ASSET_ID = assetId},
-		nil
-	)
-
-	local jsonResponse = serde.decode("json", response)
-	if statusCode == 200 then
-		return jsonResponse
-	else
-		Util.dprint("Failed to get package meta for assetId:", assetId, "Status Code:", statusCode, "Response:", response)
-		return nil
-	end
-end
-
-local function getPackageContent(assetId: string, versionNumber: number?): string?
-	local urlData: API.URL
-	local replacements = {ASSET_ID = assetId}
-
-	if versionNumber then
-		urlData = API.URLS.GET_CONTENT_BY_VERSION
-		replacements["VERSION_NUMBER"] = tostring(versionNumber)
-	else
-		urlData = API.URLS.GET_CONTENT
-	end
-
-	local statusCode, response = API.makeRequest(
-		urlData,
-		replacements,
-		nil
-	)
-
-	local jsonResponse = serde.decode("json", response)
-	if statusCode == 200 then
-		local assetTypeId = jsonResponse["assetTypeId"]
-		if assetTypeId ~= 10 then
-			print("Requested asset is not a package model!")
-			return nil
-		end
-
-		return jsonResponse
-	else
-		print("Failed to get package content for assetId:", assetId, "Status Code:", statusCode, "Response:", response)
-		return nil
-	end
-end
-
-local function getPackageTree(assetId: string): (string?, any?)
-	local meta = getAssetMeta(assetId)
-	if not meta then
-		warn("Could not get package meta for asset with ID:", assetId)
-		return nil
-	end
-	local packageName: string = meta["displayName"]
-	local packageRevisionId: string = meta["revisionId"]
-	local content: any? = getPackageContent(assetId)
-	if content then
-		local dataLocation = content["location"]
-		local statusCode, response = API.makeRequest(
-			{
-				url = dataLocation,
-				method = "GET"
-			},
-			nil,
-			nil,
-			{
-				["Accept-Encoding"] = "gzip",
-			}
-		)
-		local success, deserializedPackage = pcall(function()
-			return roblox.deserializeModel(response)
-		end)
-
-		if not success then
-			warn("Unable to deserialize package: ", assetId)
-			return nil
-		end
-		
-		if #deserializedPackage == 0 then
-			print("No instances found in the package content for assetId:", assetId)
-			return nil
-		end
-
-		local treeSuccess, tree = pcall(function()
-			return Tree.constructInstanceTreeFromInstance(deserializedPackage, packageName, assetId, packageRevisionId)
-		end)
-
-		if not treeSuccess then 
-			warn("Could not construct instance tree for package:", meta["displayName"])
-			-- print(tree)
-			return nil
-		end
-
-		if Util.DebugMode then
-			if not fs.isDir("debug") then
-				fs.writeDir("debug")
-			end
-			fs.writeFile("debug/package_tree_from_instance.json", serde.encode("json", tree, true))
-		end
-
-		return packageName, tree
-	else
-		return nil
-	end
-end
-
-local function getPackageVersions(assetId: string): any?
-	local statusCode, response = API.makeRequest(
-		API.URLS.GET_VERSIONS,
-		{ASSET_ID = assetId},
-		nil
-	)
-
-	local jsonResponse = serde.decode("json", response)
-	if statusCode == 200 then
-		return jsonResponse
-	else
-		Util.dprint("Failed to get package versions for assetId:", assetId, "Status Code:", statusCode, "Response:", response)
-		return nil
-	end
-end
-
-local function getPackageChanges(packageName: string): (boolean, Tree.TreeComparisonResult?, Tree.TreeState?)
-	local outDir = Config.get("outputDirectory")
-	local packagePath = Util.joinPathParts(outDir, packageName)
-	if not fs.isDir(packagePath) then
-		warn("Package not found at path:", packagePath)
-		return false
-	end
-
-	local treeNew = Tree.constructInstanceTreeFromDirectory(packagePath)
-	local packageAssetId = treeNew.packageAssetId
-	if not packageAssetId then
-		warn("Package at path does not have a valid asset ID:", packagePath)
-		return false
-	end
-
-	local treeCurrentName, treeCurrent = getPackageTree(packageAssetId)
-	if not treeCurrent then
-		warn("Could not get current package tree for asset:", packageAssetId)
-		return false
-	end
-
-	local state: Tree.TreeState = "Unchanged"
-
-	local changes = Tree.compareTrees(treeCurrent, treeNew)
-	if changes.anyChanges == false then
-		if tonumber(treeCurrent.packageRevisionId) > tonumber(treeNew.packageRevisionId) then
-			state = "Outdated"
-		end
-
-		return false, nil, state
-	else
-		if #changes.added > 0 or #changes.removed > 0 then
-			state = "Modified"
-		else
-			state = "Unchanged"
-		end
-
-		if tonumber(treeCurrent.packageRevisionId) > tonumber(treeNew.packageRevisionId) then
-			state = "Outdated"
-		end
-
-		return true, changes, state
-	end
-end
-
-local function publishToPackage(packageName: string, revisionNote: string?): API.PUBLISH_STATE
-	local outDir = Config.get("outputDirectory")
-	local packagePath = Util.joinPathParts(outDir, packageName)
-	if not fs.isDir(packagePath) then
-		warn("Package not found at path:", packagePath)
-		return "FAILED"
-	end
-
-	local changes, _c, _s = getPackageChanges(packageName)
-	if changes == false then
-		print("No changes to publish for package:", packageName)
-		return "NO-CHANGES"
-	end
-
-	local tree = Tree.constructInstanceTreeFromDirectory(packagePath)
-	local package = Tree.constructPackageFromTree(tree)
-
-	local serializedPackage = roblox.serializeModel(package)
-
-	local statusCode, response = API.makeAdvRequest(
-		"https://apis.roblox.com/assets/v1/assets/" .. (tree.packageAssetId :: string),
-		API.URLS.UPDATE_CONTENT.method,
-		{ 
-			["Content-Type"] = API.PACKAGE_CONTENT_TYPE 
-		},
-		nil,
-		{
-			request = serde.encode("json", {
-				["assetId"] = tonumber(tree.packageAssetId),
-			}),
-			fileContent = serializedPackage
-		}
-
-	)
-
-	print(response)
-
-	if statusCode == 200 then
-		local jsonResponse = serde.decode("json", response)
-		local taskDone = jsonResponse["done"] or false
-
-		if taskDone == false then
-			print("Submitted package to publish")
-		else
-			print("Package published")
-		end
-
-		return "SUCCESS"
-	else
-		warn("Failed to publish package:", packageName, "Status Code:", statusCode, "Response:", response)
-		return "FAILED"
-	end
-end
-
---// Main
-local function create(assetId: string)
-	print("Processing...")
-	local packageName, tree = getPackageTree(assetId)
+local function createPackage(
+	assetId: string
+)
+	local packageName, tree = RobloxAPI.getPackageTree(assetId)
 	if not tree or not packageName then
 		print("Failed to retrieve package tree.")
 		return
@@ -265,17 +39,65 @@ local function create(assetId: string)
 	if not fs.isDir(outDir) then
 		fs.writeDir(outDir)
 	end
+
+	if fs.isDir(Util.joinPathParts(outDir, packageName)) then
+		print(
+			colored("Package already downloaded! If you want to update the local package then use the", "yellow"),
+		 	colored("update", "magenta"),
+		 	colored("command.", "yellow")
+		)
+		return
+	end
 	
 	Tree.writeInstanceTreeToFS(tree, outDir, true)
 	local outDirPackage = Util.joinPathParts(outDir, packageName)
-
 	local packageMetaFile = Util.joinPathParts(outDirPackage, Tree.PACKAGE_META_FILE_PATH)
 
 	fs.writeFile(packageMetaFile, serde.encode("json", tree, true))
-	print("Package extracted to:", outDirPackage)
+	print("Package created at:", outDirPackage)
 end
 
-local function getPackageInfo(packageName: string)
+local function updateLocalPackage(
+	packageName: string
+)
+	local outDir = Config.get("outputDirectory")
+	local packagePath = Util.joinPathParts(outDir, packageName)
+	if not fs.isDir(packagePath) then
+		warn("Package not found at path:", packagePath)
+		return
+	end
+	local packageMetaPath = Util.joinPathParts(packagePath, Tree.PACKAGE_META_FILE_PATH)
+	local packageMetaContent = fs.readFile(packageMetaPath)
+	local success, packageData = pcall(function()
+		return serde.decode("json", packageMetaContent)
+	end)
+	if not success then
+		warn("Could not read package meta at path:", packageMetaPath)
+		return
+	end
+
+	local assetId: string = packageData["packageAssetId"]
+	local packageRevisionId: string? = packageData["packageRevisionId"]
+	local packageNameNew, treeNew = RobloxAPI.getPackageTree(assetId)
+	if not treeNew or not packageNameNew then
+		warn("Failed to retrieve updated package tree.")
+		return
+	end
+
+	local newRevisionId: string? = treeNew.packageRevisionId
+	if packageRevisionId == newRevisionId then
+		print(colored("Package is already up to date", "grey"))
+		return
+	end
+
+	Tree.writeInstanceTreeToFS(treeNew, outDir, true)
+	fs.writeFile(packageMetaPath, serde.encode("json", treeNew, true))
+	print(colored("Package updated successfully", "green"))
+end
+
+local function getPackageInfo(
+	packageName: string
+)
 	local outDir = Config.get("outputDirectory")
 	local packagePath = Util.joinPathParts(outDir, packageName)
 	if not fs.isDir(packagePath) then
@@ -307,14 +129,16 @@ local function getPackageInfo(packageName: string)
 	end
 end
 
-local function getPackageRevisions(assetId: string)
-	local meta = getAssetMeta(assetId)
+local function getPackageRevisions(
+	assetId: string
+)
+	local meta = RobloxAPI.getAssetMeta(assetId)
 	if not meta then
 		warn("Could not get package meta for asset with ID:", assetId)
 		return
 	end
 
-	local versionsResponse = getPackageVersions(assetId)
+	local versionsResponse = RobloxAPI.getPackageVersions(assetId)
 	local assetVersions = {}
 	for _, versionData in versionsResponse["assetVersions"] do
 		local basePath: string = versionData["path"]
@@ -334,8 +158,10 @@ local function getPackageRevisions(assetId: string)
 	end
 end
 
-local function getPackageDiff(packageName: string)
-	local anyChanges, changes, state = getPackageChanges(packageName)
+local function getPackageDiff(
+	packageName: string
+)
+	local anyChanges, changes, state = RobloxAPI.getPackageChanges(packageName)
 
 	if state == "Outdated" then
 		print(colored("Local package is outdated, update by re-downloading.", "yellow"))
@@ -377,18 +203,15 @@ local function getPackageDiff(packageName: string)
 	end
 end
 
-local function publish(packageName: string)
-	local publishStatus = publishToPackage(packageName)
+local function publishPackage(
+	packageName: string
+)
+	local publishStatus = RobloxAPI.publishToPackage(packageName)
 	if publishStatus == "SUCCESS" then
 		print(colored("Package published successfully: " .. packageName, "green"))
 	elseif publishStatus == "FAILED" then
 		print(colored("Failed to publish package: " .. packageName, "red"))
 	end
-end
-
-local function debug(assetId: string)
-	local content = getPackageContent(assetId)
-	print(content)
 end
 
 local function setup()
@@ -397,10 +220,28 @@ local function setup()
 		fs.writeDir(outDir)
 	end
 
-	print("Setup current working directory for use with Repackager")
+	local secretsDir = Config.getOrDefault("secretsDirectory")
+	if not fs.isDir(secretsDir) then
+		fs.writeDir(secretsDir)
+	end
+
+	local secretsFile = Config.getOrDefault("secretsFile")
+	local secretsFilePath = Util.joinPathParts(secretsDir, secretsFile)
+	if not fs.isFile(secretsFilePath) then
+		fs.writeFile(secretsFilePath, "REPLACE THIS TEXT WITH YOUR API KEY")
+		print("Created secrets file at:", secretsFilePath)
+		print(colored("When creating an API key, ensure it has the following permissions:", "yellow"))
+		print(colored("  - asset:read", "green"))
+		print(colored("  - asset:write", "green"))
+		print(colored("  - legacy-asset:manage", "green"))
+	end
+
+	print("Setup the current working directory for use with Repackage")
 end
 
-local function showHelp(commands)
+local function showHelp(
+	commands: {[string]: Command}
+)
 	print(colored("Repackage - Package Manager", "light_cyan", nil, {"bold"}))
 	print(colored("Usage: Repackage.luau <command> [args...]", "light_magenta", nil, {"bold"}))
 	print(colored("Commands:", "light_cyan", nil, {"bold"}))
@@ -419,21 +260,27 @@ local function showHelp(commands)
 	end
 end
 
+--// Main
 local Commands: {[string]: Command} = {
 	setup = {
 		args = {},
-		desc = "Setup the current folder for Repackager usage",
+		desc = "Setup the current folder for Repackage usage",
 		func = setup
 	},
 	create = {
 		args = {"Package Asset ID"},
 		desc = "Create a package onto the filesystem from a package asset",
-		func = create
+		func = createPackage
+	},
+	update = {
+		args = {"Package Name"},
+		desc = "Update a local package to the latest version available on Roblox",
+		func = updateLocalPackage
 	},
 	publish = {
 		args = {"Package Name"},
 		desc = "Publish local package changes to the package asset (UNFINISHED)",
-		func = publish
+		func = publishPackage
 	},
 	info = {
 		args = {"Package Name"},
@@ -450,10 +297,16 @@ local Commands: {[string]: Command} = {
 		desc = "Get differences between local package and the current uploaded package asset",
 		func = getPackageDiff
 	},
-	debug = {
-		args = {"Package Asset ID"},
-		func = debug
+	help = {
+		args = {},
+		desc = "Show this help message",
 	}
+}
+
+local HelpAliases = {
+	"-h",
+	"--help",
+	"help"
 }
 
 local function main()
@@ -466,6 +319,8 @@ local function main()
 	elseif process.args[1] == nil then
 		print(colored("No command provided!", "yellow"))
 		return
+	elseif table.find(HelpAliases, process.args[1]) then
+		showHelp(Commands)
 	elseif not Commands[process.args[1]] then
 		print(colored("Unknown command: " .. process.args[1], "yellow"))
 		return
@@ -483,8 +338,9 @@ local function main()
 			end
 			table.insert(commandArgs, argValue)
 		end
-
-		commandData.func(table.unpack(commandArgs))
+		if commandData.func then
+			commandData.func(table.unpack(commandArgs))
+		end
 	end
 end
 

@@ -11,8 +11,8 @@ local serde = require("@lune/serde")
 local Util = require("./Util")
 
 local DMPLib = require("./Lib/diff_match_patch")
---// Types
 
+--// Types
 export type ScriptNode = LocalScript | Script | ModuleScript
 export type TreeNodeType = "file" | "directory"
 export type TreeNode = {
@@ -58,7 +58,9 @@ local PACKAGE_META_FILE = "repackage.json"
 local Tree = {}
 Tree.PACKAGE_META_FILE_PATH = PACKAGE_META_FILE
 
-function Tree.getInstanceProperties(instance: Instance): {[string]: any}
+function Tree.getInstanceProperties(
+	instance: Instance
+): {[string]: any}
 	local properties: {[string]: any} = {}
 	local classInfo = DB:GetClass(instance.ClassName)
 	if classInfo then
@@ -77,7 +79,12 @@ function Tree.getInstanceProperties(instance: Instance): {[string]: any}
 	return properties
 end
 
-function Tree.constructInstanceTreeFromInstance(instance: Instance | {Instance}, packageName: string?, packageAssetId: string?, packageRevisionId: string?): TreeNode
+function Tree.constructInstanceTreeFromInstance(
+	instance: Instance | {Instance}, 
+	packageName: string?, 
+	packageAssetId: string?, 
+	packageRevisionId: string?
+): TreeNode
 	if typeof(instance) == "table" then
 		if #instance == 0 then
 			error("Instance array is empty")
@@ -199,7 +206,9 @@ function Tree.constructInstanceTreeFromInstance(instance: Instance | {Instance},
     end
 end
 
-function Tree.constructInstanceTreeFromDirectory(dirPath: string): TreeNode
+function Tree.constructInstanceTreeFromDirectory(
+	dirPath: string
+): TreeNode
 	if not fs.isDir(dirPath) then
 		error("Directory does not exist or is not a directory: " .. dirPath)
 	end
@@ -259,37 +268,9 @@ function Tree.constructInstanceTreeFromDirectory(dirPath: string): TreeNode
 	}
 end
 
-function Tree.writeInstanceTreeToFS(tree: any, basePath: string, clearOld: boolean)
-	if clearOld then
-		if fs.isDir(basePath) then
-			print("Clearing old version")
-			for _, item in fs.readDir(basePath) do
-				local itemPath = Util.joinPathParts(basePath, item)
-				if fs.isDir(itemPath) then
-					fs.removeDir(itemPath)
-				else
-					fs.removeFile(itemPath)
-				end
-			end
-		end
-	end
-	
-	if tree.type == "directory" then
-		local dirPath = Util.joinPathParts(basePath, tree.name)
-		Util.dprint("Writing: ", dirPath)
-		fs.writeDir(dirPath)
-		
-		for _, child in tree.children do
-			Tree.writeInstanceTreeToFS(child, dirPath, false)
-		end
-	elseif tree.type == "file" then
-		local filePath = Util.joinPathParts(basePath, tree.name)
-		Util.dprint("Writing: ", filePath)
-		fs.writeFile(filePath, tree.content)
-	end
-end
-
-function Tree.constructInstanceFromTreeNode(node: TreeNode): Instance
+function Tree.constructInstanceFromTreeNode(
+	node: TreeNode
+): Instance
 	if node.type == "directory" then
 		local initScriptNode: TreeNode? = nil
 		if node.children then
@@ -374,7 +355,48 @@ function Tree.constructInstanceFromTreeNode(node: TreeNode): Instance
 	end
 end
 
-function Tree.constructPackageFromTree(tree: TreeNode): {Instance}
+function Tree.writeInstanceTreeToFS(
+	tree: TreeNode, 
+	basePath: string, 
+	clearOld: boolean)
+	if clearOld then
+		if fs.isDir(basePath) then
+			print("Clearing old version")
+			for _, item in fs.readDir(basePath) do
+				local itemPath = Util.joinPathParts(basePath, item)
+				if fs.isDir(itemPath) then
+					fs.removeDir(itemPath)
+				else
+					fs.removeFile(itemPath)
+				end
+			end
+		end
+	end
+	
+	if tree.type == "directory" then
+		local dirPath = Util.joinPathParts(basePath, tree.name)
+		Util.dprint("Writing: ", dirPath)
+		fs.writeDir(dirPath)
+		
+		if tree.children then
+			for _, child in tree.children do
+				Tree.writeInstanceTreeToFS(child, dirPath, false)
+			end
+		end
+	elseif tree.type == "file" then
+		local filePath = Util.joinPathParts(basePath, tree.name)
+		Util.dprint("Writing: ", filePath)
+		if tree.content then
+			fs.writeFile(filePath, tree.content)
+		else
+			print("Warning: File node has no content:", filePath)
+		end
+	end
+end
+
+function Tree.constructPackageFromTree(
+	tree: TreeNode
+): {Instance}
 	local instances: {Instance} = {}
 
 	if tree.type ~= "directory" then
@@ -391,7 +413,10 @@ function Tree.constructPackageFromTree(tree: TreeNode): {Instance}
 	return instances
 end
 
-function Tree.compareTrees(oldTree: TreeNode, newTree: TreeNode): TreeComparisonResult
+function Tree.compareTrees(
+	oldTree: TreeNode, 
+	newTree: TreeNode
+): TreeComparisonResult
     local result: TreeComparisonResult = {
         added = {},
         removed = {},
@@ -502,19 +527,8 @@ function Tree.compareTrees(oldTree: TreeNode, newTree: TreeNode): TreeComparison
 	if Util.DebugMode then
 		fs.writeFile("packageDiff.diff", fullDiff)
 	end
-	
 
     return result
 end
-
--- function Tree.compareTreesPackages(oldTreePackage: Instance | {Instance}, newTreePackage: Instance | {Instance}): TreeComparisonResult
--- 	local result: TreeComparisonResult = {
--- 		added = {},
--- 		removed = {},
--- 		modified = {}
--- 	}
-
--- 	return result
--- end
 
 return Tree

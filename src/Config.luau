@@ -13,6 +13,8 @@ local Util = require("./Util")
 
 export type ConfigOption = 
 	"outputDirectory" |
+	"secretsDirectory" |
+	"secretsFile" |
 	"debugLogs"
 
 export type Config = {
@@ -24,6 +26,8 @@ local PACKAGE_CONFIG_FILE = "repackage.config.json"
 
 local DEFAULT_CONFIG: Config = {
 	outputDirectory = "output/",
+	secretsDirectory = "secrets/",
+	secretsFile = "apikey.txt",
 	debugLogs = false,
 }
 
@@ -79,7 +83,9 @@ function Config.getConfig(): Config
 	return UserConfig
 end
 
-function Config.get(key: ConfigOption): any?
+function Config.get(
+	key: ConfigOption
+): any?
 	local success, value = pcall(function()
 		return UserConfig[key]
 	end)
@@ -91,7 +97,9 @@ function Config.get(key: ConfigOption): any?
 	end
 end
 
-function Config.getOrDefault(key: ConfigOption): any
+function Config.getOrDefault(
+	key: ConfigOption
+): any
 	local value = Config.get(key)
 	if value == nil then
 		return DEFAULT_CONFIG[key]

@@ -3,23 +3,29 @@
 --// Author: okzyrox
 --/ Date: 2025/12/18
 
+--// Vars
+local PrintExtraProperties = {
+	["Animation"] = {"AnimationId"},
+}
+
 --// Module
 
 local Util = {}
 Util.DebugMode = false
 
-function Util.dprint(...)
+function Util.dprint(
+	...: any
+)
 	if not Util.DebugMode then
 		return
 	end
 	print(...)
 end
 
-local PrintExtraProperties = {
-	["Animation"] = {"AnimationId"},
-}
-
-function Util.printInstance(instance: Instance, indent: string)
+function Util.printInstance(
+	instance: Instance, 
+	indent: string
+)
 	print(indent .. instance.Name .. " (" .. instance.ClassName .. ")")
 	local extraProps = PrintExtraProperties[instance.ClassName]
 	if extraProps then
@@ -41,7 +47,9 @@ function Util.printInstance(instance: Instance, indent: string)
 	end
 end
 
-function Util.getScriptTypeFromName(fileName: string): string?
+function Util.getScriptTypeFromName(
+	fileName: string
+): string?
 	if fileName:find("%.client%.luau$") then
 		return "LocalScript"
 	elseif fileName:find("%.server%.luau$") then
@@ -53,7 +61,9 @@ function Util.getScriptTypeFromName(fileName: string): string?
 	end
 end
 
-function Util.joinPathParts(...: string): string
+function Util.joinPathParts(
+	...: string
+): string
     local parts = { ... }
     local result = ""
 

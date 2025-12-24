@@ -8,7 +8,7 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
 
 - [x] Generate package map for a given package (asset)
     - [ ] generate from specific revision
-        - [ ] embed revision ID into package
+        - [x] embed revision ID into package
 - [x] Generate a matching map for a given directory
 - [x] Compare mappings for changes
 - [ ] Publishing to package
@@ -24,3 +24,6 @@ Currently cannot handle anything other than:
     - Animations
     - Sounds
 if a package contains something not in this list, then it will not be saved to a file.
+
+Requires a specific structure for packages;
+- The package's "main" instance must be a Folder (the instance with the PackageLink inside)
