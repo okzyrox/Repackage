@@ -266,7 +266,7 @@ local function create(assetId: string)
 		fs.writeDir(outDir)
 	end
 	
-	Tree.writeInstanceTreeToFS(tree, outDir)
+	Tree.writeInstanceTreeToFS(tree, outDir, true)
 	local outDirPackage = Util.joinPathParts(outDir, packageName)
 
 	local packageMetaFile = Util.joinPathParts(outDirPackage, Tree.PACKAGE_META_FILE_PATH)

@@ -61,7 +61,7 @@ function Config.loadConfig(): Config
 	local configNeededUpdate = false 
 
 	for key, value in DEFAULT_CONFIG do
-		if parsedConfig[key] == nil then
+		if parsedConfig[key] == nil or parsedConfig[key] == "" then
 			configNeededUpdate = true
 			UserConfig[key] = value
 		end

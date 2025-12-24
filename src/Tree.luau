@@ -259,14 +259,28 @@ function Tree.constructInstanceTreeFromDirectory(dirPath: string): TreeNode
 	}
 end
 
-function Tree.writeInstanceTreeToFS(tree: any, basePath: string)
+function Tree.writeInstanceTreeToFS(tree: any, basePath: string, clearOld: boolean)
+	if clearOld then
+		if fs.isDir(basePath) then
+			print("Clearing old version")
+			for _, item in fs.readDir(basePath) do
+				local itemPath = Util.joinPathParts(basePath, item)
+				if fs.isDir(itemPath) then
+					fs.removeDir(itemPath)
+				else
+					fs.removeFile(itemPath)
+				end
+			end
+		end
+	end
+	
 	if tree.type == "directory" then
 		local dirPath = Util.joinPathParts(basePath, tree.name)
 		Util.dprint("Writing: ", dirPath)
 		fs.writeDir(dirPath)
 		
 		for _, child in tree.children do
-			Tree.writeInstanceTreeToFS(child, dirPath)
+			Tree.writeInstanceTreeToFS(child, dirPath, false)
 		end
 	elseif tree.type == "file" then
 		local filePath = Util.joinPathParts(basePath, tree.name)
