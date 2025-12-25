@@ -30,3 +30,11 @@ if a package contains something not in this list, then it will not be saved to a
 
 Requires a specific structure for packages;
 - The package's "main" instance must be a Folder (the instance with the PackageLink inside)
+
+## Known issues
+
+- Commands are limited
+- Internal returned values are all over the place (my bad..)
+- No user-facing access to downloading specific versions of packages
+- Publishing a package doesnt update the local package tree:
+    - although since the operation can take a variable amount of time doing this via a wait is probably bad

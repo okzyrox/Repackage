@@ -23,6 +23,25 @@ local PACKAGE_CONTENT_TYPE = "model/x-rbxm"
 
 local RobloxAPI = {}
 
+function RobloxAPI.getLocalPackagePath(
+	packageName: string
+): string?
+	local outDir = Config.get("outputDirectory")
+	local packagePath = Util.joinPathParts(outDir, packageName)
+	if not fs.isDir(packagePath) then
+		if Util.stringEndsWith(packagePath, ".Package") then
+			return nil
+		else
+			packagePath = Util.joinPathParts(outDir, packageName .. ".Package")
+			if not fs.isDir(packagePath) then
+				return nil
+			end
+		end
+	end
+
+	return packagePath
+end
+
 --/ Get Asset Meta
 function RobloxAPI.getAssetMeta(
     assetId: string, 
@@ -176,19 +195,10 @@ end
 function RobloxAPI.getPackageChanges(
     packageName: string
 ): (boolean, Tree.TreeComparisonResult?, Tree.TreeState?)
-	local outDir = Config.get("outputDirectory")
-	local packagePath = Util.joinPathParts(outDir, packageName)
-	if not fs.isDir(packagePath) then
-		if Util.stringEndsWith(packagePath, ".Package") then
-			warn("Package not found at path:", packagePath)
-			return false, nil, "None"
-		else
-			packagePath = Util.joinPathParts(outDir, packageName .. ".Package")
-			if not fs.isDir(packagePath) then
-				warn("Package not found at path:", packagePath)
-				return false, nil, "None"
-			end
-		end
+	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
+	if not packagePath then
+		warn("Package not found with name:", packageName)
+		return false, nil, "None"
 	end
 
 	local treeNew = Tree.constructInstanceTreeFromDirectory(packagePath)
@@ -228,15 +238,14 @@ function RobloxAPI.getPackageChanges(
 	end
 end
 
---/ Publish to a package (buggy; incomplete)
+--/ Publish to a package
 function RobloxAPI.publishToPackage(
     packageName: string, 
     _revisionNote: string?
 ): (PUBLISH_STATE, string?)
-	local outDir = Config.get("outputDirectory")
-	local packagePath = Util.joinPathParts(outDir, packageName)
-	if not fs.isDir(packagePath) then
-		warn("Package not found at path:", packagePath)
+	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
+	if not packagePath then
+		warn("Package not found with name:", packageName)
 		return "FAILED", nil
 	end
 
@@ -274,7 +283,7 @@ function RobloxAPI.publishToPackage(
 
 	)
 
-	print(response)
+	-- print(response)
 
 	if statusCode == 200 then
 		local jsonResponse = serde.decode("json", response)

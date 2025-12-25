@@ -55,7 +55,11 @@ local function createPackage(
 		fs.writeDir(outDir)
 	end
 
-	local packageOutDir = Util.joinPathParts(outDir, packageName .. Tree.PACKAGE_ROOT_APPEND)
+	local packageOutDir = RobloxAPI.getLocalPackagePath(packageName)
+	if not packageOutDir then
+		warn("Package not found with name:", packageName)
+		return
+	end
 	
 	if fs.isDir(packageOutDir) then
 		print(
@@ -76,12 +80,16 @@ local function updateLocalPackage(
 	packageName: string
 )
 	local outDir = Config.get("outputDirectory")
-	local packagePath = Util.joinPathParts(outDir, packageName)
-	if not fs.isDir(packagePath) then
-		warn("Package not found at path:", packagePath)
+	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
+	if not packagePath then
+		warn("Package not found with name:", packageName)
 		return
 	end
 	local packageMetaPath = Util.joinPathParts(packagePath, Tree.PACKAGE_META_FILE_PATH)
+	if not fs.isFile(packageMetaPath) then
+		warn("Package meta file not found in package folder:", packageMetaPath)
+		return
+	end
 	local packageMetaContent = fs.readFile(packageMetaPath)
 	local success, packageData = pcall(function()
 		return serde.decode("json", packageMetaContent)
@@ -132,10 +140,9 @@ end
 local function getPackageInfo(
 	packageName: string
 )
-	local outDir = Config.get("outputDirectory")
-	local packagePath = Util.joinPathParts(outDir, packageName)
-	if not fs.isDir(packagePath) then
-		warn("Package not found at path:", packagePath)
+	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
+	if not packagePath then
+		warn("Package not found with name:", packageName)
 		return
 	end
 
@@ -149,9 +156,9 @@ local function getPackageInfo(
 		print(" Package Asset ID: N/A")
 	end
 	if tree.packageRevisionId then
-		print(" Package Revision ID: " .. tree.packageRevisionId)
+		print(" Package Revision: " .. tree.packageRevisionId)
 	else
-		print(" Package Revision ID: N/A")
+		print(" Package Revision: N/A")
 	end
 	print(" Root Path: " .. packagePath)
 	local package = Tree.constructPackageFromTree(tree)
@@ -191,7 +198,7 @@ local function getPackageRevisions(
 		})
 	end
 
-	print("Revisions for ", meta["displayName"])
+	print("Latest Revisions for", meta["displayName"])
 	for _, versionInfo in assetVersions do
 		print(colored(" ID: " .. versionInfo.revisionId .. " | Date: " .. versionInfo.revisionDate, "light_grey"))
 	end
@@ -324,7 +331,7 @@ local Commands: {[string]: Command} = {
 	},
 	publish = {
 		args = {"Package Name"},
-		desc = "Publish local package changes to the package asset (UNFINISHED)",
+		desc = "Publish local package changes to the package asset",
 		func = publishPackage
 	},
 	info = {
