@@ -27,6 +27,21 @@ type Command = {
 local COMMAND_LIST_PADDING = 12
 
 --// Functions
+
+local function promptContinue(
+	message: string
+): boolean
+	stdio.write(colored(message .. " (y/n): ", "light_yellow"))
+	local input = stdio.readLine()
+	local lowered = input:lower()
+	lowered = lowered:gsub("\r", ""):gsub("\n", "")
+	if #lowered == 0 then
+		return false
+	end
+
+	return lowered == "y" or lowered == "yes"
+end
+
 local function createPackage(
 	assetId: string
 )
@@ -40,7 +55,9 @@ local function createPackage(
 		fs.writeDir(outDir)
 	end
 
-	if fs.isDir(Util.joinPathParts(outDir, packageName)) then
+	local packageOutDir = Util.joinPathParts(outDir, packageName .. Tree.PACKAGE_ROOT_APPEND)
+	
+	if fs.isDir(packageOutDir) then
 		print(
 			colored("Package already downloaded! If you want to update the local package then use the", "yellow"),
 		 	colored("update", "magenta"),
@@ -50,11 +67,9 @@ local function createPackage(
 	end
 	
 	Tree.writeInstanceTreeToFS(tree, outDir, true)
-	local outDirPackage = Util.joinPathParts(outDir, packageName)
-	local packageMetaFile = Util.joinPathParts(outDirPackage, Tree.PACKAGE_META_FILE_PATH)
-
+	local packageMetaFile = Util.joinPathParts(packageOutDir, Tree.PACKAGE_META_FILE_PATH)
 	fs.writeFile(packageMetaFile, serde.encode("json", tree, true))
-	print("Package created at:", outDirPackage)
+	print("Package created at:", packageOutDir)
 end
 
 local function updateLocalPackage(
@@ -76,6 +91,25 @@ local function updateLocalPackage(
 		return
 	end
 
+	local anyChanges, _changes, _state = RobloxAPI.getPackageChanges(packageName)
+	if anyChanges then
+		print(
+			colored("Local package has modifications, updating will overwrite those changes", "yellow"),
+			colored("if", "yellow", nil, {"bold"}),
+			colored("there is a newer version available.", "yellow")
+		)
+		print(
+			colored("You can view the changes via the", "grey"),
+		 	colored("diff", "magenta"),
+		 	colored("command.", "grey")
+		)
+		local proceed = promptContinue("Do you want to continue with the update?")
+		if not proceed then
+			print(colored("Update cancelled.", "red"))
+			return
+		end
+	end
+
 	local assetId: string = packageData["packageAssetId"]
 	local packageRevisionId: string? = packageData["packageRevisionId"]
 	local packageNameNew, treeNew = RobloxAPI.getPackageTree(assetId)
@@ -89,7 +123,7 @@ local function updateLocalPackage(
 		print(colored("Package is already up to date", "grey"))
 		return
 	end
-
+	
 	Tree.writeInstanceTreeToFS(treeNew, outDir, true)
 	fs.writeFile(packageMetaPath, serde.encode("json", treeNew, true))
 	print(colored("Package updated successfully", "green"))
@@ -120,8 +154,13 @@ local function getPackageInfo(
 		print(" Package Revision ID: N/A")
 	end
 	print(" Root Path: " .. packagePath)
-
 	local package = Tree.constructPackageFromTree(tree)
+	local totalItems = Util.tableCount(package)
+	local proceed = promptContinue("List the package contents?" .. (" (" .. totalItems .. " items)"))
+	if not proceed then
+		return
+	end
+
 	print(colored("Contents:", "cyan"))
 	for i, packageItem in package do
 		stdio.write("[" .. i .. "]")

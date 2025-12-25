@@ -85,4 +85,19 @@ function Util.joinPathParts(
     return result
 end
 
+function Util.tableCount(
+	table: { [any]: any }
+): number
+	local count = 0
+	for _key, item in table do
+		count += 1
+		if type(item) == "table" then
+			count += Util.tableCount(item)
+		elseif type(item) == "userdata" and typeof(item) == "Instance" then
+			count += Util.tableCount(item:GetChildren())
+		end
+	end
+	return count
+end
+
 return Util

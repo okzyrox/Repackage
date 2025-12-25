@@ -3,6 +3,15 @@
 * https://pypi.org/project/termcolor/
 ]]
 
+export type Attribute = 
+	"bold" | 
+	"dark" | 
+	"underline" | 
+	"blink" | 
+	"reverse" | 
+	"concealed" |
+	"strike"
+
 local ATTRIBUTES = {
 	bold = 1,
 	dark = 2,
@@ -12,6 +21,25 @@ local ATTRIBUTES = {
 	concealed = 8,
 	strike = 9,
 }
+
+export type Hightlight = 
+	"on_black" |
+	"on_grey" |
+	"on_red" |
+	"on_green" |
+	"on_yellow" |
+	"on_blue" |
+	"on_magenta" |
+	"on_cyan" |
+	"on_light_grey" |
+	"on_dark_grey" |
+	"on_light_red" |
+	"on_light_green" |
+	"on_light_yellow" |
+	"on_light_blue" |
+	"on_light_magenta" |
+	"on_light_cyan" |
+	"on_white"
 
 local HIGHLIGHTS = {
 	on_black = 40,
@@ -32,6 +60,25 @@ local HIGHLIGHTS = {
 	on_light_cyan = 106,
 	on_white = 107,
 }
+
+export type Color = 
+	"black" |
+	"grey" |
+	"red" |
+	"green" |
+	"yellow" |
+	"blue" |
+	"magenta" |
+	"cyan" |
+	"light_grey" |
+	"dark_grey" |
+	"light_red" |
+	"light_green" |
+	"light_yellow" |
+	"light_blue" |
+	"light_magenta" |
+	"light_cyan" |
+	"white"
 
 local COLORS = {
 	black = 30,
@@ -55,7 +102,7 @@ local COLORS = {
 
 local RESET = "\27[0m"
 
-local function colored(text, color, on_color, attrs)
+local function colored(text: string, color: Color? | {number}?, on_color: Highlight? | {number}?, attrs: {Attribute}? )
 	local result = tostring(text)
 	local fmt = "\27[%dm%s"
 	local rgbFore = "\27[38;2;%d;%d;%dm%s"

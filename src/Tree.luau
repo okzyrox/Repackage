@@ -52,11 +52,13 @@ local SCRIPT_EXTENSIONS = {
 }
 
 local PACKAGE_META_FILE = "repackage.json"
+local PACKAGE_ROOT_APPEND = ".Package"
 
 --// Module
 
 local Tree = {}
 Tree.PACKAGE_META_FILE_PATH = PACKAGE_META_FILE
+Tree.PACKAGE_ROOT_APPEND = PACKAGE_ROOT_APPEND
 
 function Tree.getInstanceProperties(
 	instance: Instance
@@ -91,7 +93,7 @@ function Tree.constructInstanceTreeFromInstance(
 		end
 		return {
 			type = "directory",
-			name = packageName or "PackageRoot",
+			name = (packageName or "PackageRoot") .. PACKAGE_ROOT_APPEND,
 			packageAssetId = packageAssetId,
 			packageRevisionId = packageRevisionId,
 			children = (function()
@@ -360,7 +362,8 @@ function Tree.writeInstanceTreeToFS(
 	basePath: string, 
 	clearOld: boolean)
 	if clearOld then
-		if fs.isDir(basePath) then
+		local dirPath = Util.joinPathParts(basePath, tree.name)
+		if fs.isDir(dirPath) then
 			print("Clearing old version")
 			for _, item in fs.readDir(basePath) do
 				local itemPath = Util.joinPathParts(basePath, item)
@@ -372,7 +375,6 @@ function Tree.writeInstanceTreeToFS(
 			end
 		end
 	end
-	
 	if tree.type == "directory" then
 		local dirPath = Util.joinPathParts(basePath, tree.name)
 		Util.dprint("Writing: ", dirPath)
