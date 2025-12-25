@@ -5,6 +5,7 @@
 
 --// Modules
 local net = require("@lune/net")
+local process = require("@lune/process")
 local fs = require("@lune/fs")
 
 local Util = require("./Util")
@@ -69,23 +70,45 @@ function API.getApiKey(): string
 		return ApiKey
 	end
 
-	local keyName: string? = Config.get("secretsFile")
-	if keyName == nil then
-		error("No API Key file was configured!")
-	end
-	local secretsDir: string? = Config.get("secretsDirectory")
-	if secretsDir == nil then
-		error("Configured secrets directory does not exist!")
+	local secrets = Config.get("secrets") :: Config.SecretsConfig?
+	if secrets == nil then
+		error("No secrets configuration found!")
 	end
 
-	local keyPath = Util.joinPathParts(secretsDir, keyName)
+	if secrets.secretsType == "env" then
+		local envKeyName: string? = secrets.secretsEnvKey
+		if envKeyName == nil then
+			error("No environment key was configured for the API Key!")
+		end
 
-	if fs.isFile(keyPath) then
-		local fileKey = fs.readFile(keyPath)
-		ApiKey = fileKey
-		return fileKey
+		local envKeyValue: string? = process.env[envKeyName]
+		if envKeyValue == nil then
+			error("No API key found in environment: " .. envKeyName)
+		end
+
+		ApiKey = envKeyValue
+		return envKeyValue
+	elseif secrets.secretsType == "file" then
+		local keyName: string? = secrets.secretsFile
+		if keyName == nil then
+			error("No API Key file was configured!")
+		end
+		local secretsDir: string? = secrets.secretsDirectory
+		if secretsDir == nil then
+			error("Configured secrets directory does not exist!")
+		end
+
+		local keyPath = Util.joinPathParts(secretsDir, keyName)
+
+		if fs.isFile(keyPath) then
+			local fileKey = fs.readFile(keyPath)
+			ApiKey = fileKey
+			return fileKey
+		else
+			error("No API key found! Expected at path: " .. keyPath)
+		end
 	else
-		error("No API key found! Create ")
+		error("Invalid secrets type!")
 	end
 end
 

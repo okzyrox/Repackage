@@ -13,12 +13,18 @@ local Util = require("./Util")
 
 export type ConfigOption = 
 	"outputDirectory" |
-	"secretsDirectory" |
-	"secretsFile" |
+	"secrets" |
 	"debugLogs"
 
 export type Config = {
 	[ConfigOption]: any
+}
+
+export type SecretsConfig = {
+	secretsType: "file" | "env",
+	secretsDirectory: string?,
+	secretsFile: string?,
+	secretsEnvKey: string?,
 }
 
 --// Constants
@@ -26,8 +32,14 @@ local PACKAGE_CONFIG_FILE = "repackage.config.json"
 
 local DEFAULT_CONFIG: Config = {
 	outputDirectory = "output/",
-	secretsDirectory = "secrets/",
-	secretsFile = "apikey.txt",
+
+	secrets = {
+		secretsType = "file", -- file | env
+		secretsDirectory = "secrets/",
+		secretsFile = "api_key.txt",
+		secretsEnvKey = "ROBLOX_API_KEY",
+	},
+
 	debugLogs = false,
 }
 
@@ -65,7 +77,7 @@ function Config.loadConfig(): Config
 	local configNeededUpdate = false 
 
 	for key, value in DEFAULT_CONFIG do
-		if parsedConfig[key] == nil or parsedConfig[key] == "" then
+		if parsedConfig[key] == nil or parsedConfig[key] == "" or type(value) ~= type(parsedConfig[key]) then
 			configNeededUpdate = true
 			UserConfig[key] = value
 		end

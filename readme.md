@@ -4,6 +4,34 @@ Experimental
 
 Aims to be a utility tool for quickly publishing changes to packages on Roblox relevant to a given directory of files and associated package file
 
+
+## Repackage Config
+```jsonc
+{
+  "debugLogs": false, // true / false 
+  // -- debug prints will be displayed
+
+  "outputDirectory": "output/", // a folder 
+  // -- where local packages should be downloaded to
+
+  "secrets": {
+    "secretsEnvKey": "ROBLOX_API_KEY", // a environment variable 
+    // -- the name of the environment variable with the API KEY
+
+    "secretsFile": "api_key.txt", // a filename 
+    // -- the file name of the file that has the API KEY
+
+    "secretsDirectory": "secrets/", // a folder 
+    // -- the folder name of the folder that has the file for the API KEY
+
+    "secretsType": "file" // either "file" or "env" 
+    // -- decides if to use the folder for getting the API KEY or the environment variable 
+
+  }
+}
+
+```
+
 ## Todo
 
 - [x] Generate package map for a given package (asset)

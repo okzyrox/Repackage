@@ -3,7 +3,6 @@
 *.bat
 debug/**
 output/**
-secrets/apikey.txt
-secrets/cookie.txt
+secrets/**
 
 repackage.config.json

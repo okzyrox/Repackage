@@ -67,7 +67,7 @@ local function createPackage(
 
 	local packageOutDir = Util.joinPathParts(outDir, packageName .. ".Package")
 	local packageMetaFile = Util.joinPathParts(packageOutDir, Tree.PACKAGE_META_FILE_PATH)
-	
+
 	Tree.writeInstanceTreeToFS(tree, outDir, true)
 	fs.writeFile(packageMetaFile, serde.encode("json", tree, true))
 
@@ -270,23 +270,33 @@ local function setup()
 		fs.writeDir(outDir)
 	end
 
-	local secretsDir = Config.getOrDefault("secretsDirectory")
-	if not fs.isDir(secretsDir) then
-		fs.writeDir(secretsDir)
+	local secrets = Config.getOrDefault("secrets") :: Config.SecretsConfig
+
+	if secrets.secretsType == "file" then 
+		local secretsDir = secrets.secretsDirectory
+		if not fs.isDir(secretsDir) then
+			fs.writeDir(secretsDir)
+		end
+
+		local secretsFile = secrets.secretsFile
+		local secretsFilePath = Util.joinPathParts(secretsDir, secretsFile)
+		if not fs.isFile(secretsFilePath) then
+			fs.writeFile(secretsFilePath, "REPLACE THIS TEXT WITH YOUR API KEY")
+			print("Created secrets file at:", secretsFilePath)
+		end
+	elseif secrets.secretsType == "env" then
+		print(
+			"Make sure to set the environment variable:", 
+			colored(secrets.secretsEnvKey or "ROBLOX_API_KEY", "light_green")
+		)
 	end
 
-	local secretsFile = Config.getOrDefault("secretsFile")
-	local secretsFilePath = Util.joinPathParts(secretsDir, secretsFile)
-	if not fs.isFile(secretsFilePath) then
-		fs.writeFile(secretsFilePath, "REPLACE THIS TEXT WITH YOUR API KEY")
-		print("Created secrets file at:", secretsFilePath)
-		print(colored("When creating an API key, ensure it has the following permissions:", "yellow"))
-		print(colored("  - asset:read", "green"))
-		print(colored("  - asset:write", "green"))
-		print(colored("  - legacy-asset:manage", "green"))
-	end
+	print(colored("When creating an API key, ensure it has the following permissions:", "yellow"))
+	print(colored("  - asset:read", "green"))
+	print(colored("  - asset:write", "green"))
+	print(colored("  - legacy-asset:manage", "green"))
 
-	print("Setup the current working directory for use with Repackage")
+	print("Set-up the current working directory for use with Repackage")
 end
 
 local function showHelp(
