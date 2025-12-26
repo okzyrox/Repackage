@@ -50,12 +50,14 @@ local UserConfig: Config = DEFAULT_CONFIG
 
 local Config = {}
 
-function Config.loadConfig(): Config
+function Config.loadConfig(createConfig: boolean?): Config
 	local exists = fs.isFile(PACKAGE_CONFIG_FILE)
 	if not exists then
-		Util.dprint("No config file found, creating...")
-		local defaultConfigJson = serde.encode("json", DEFAULT_CONFIG, true)
-		fs.writeFile(PACKAGE_CONFIG_FILE, defaultConfigJson)
+		if createConfig == true then
+			Util.dprint("No config file found, creating...")
+			local defaultConfigJson = serde.encode("json", DEFAULT_CONFIG, true)
+			fs.writeFile(PACKAGE_CONFIG_FILE, defaultConfigJson)
+		end
 		return DEFAULT_CONFIG
 	end
 

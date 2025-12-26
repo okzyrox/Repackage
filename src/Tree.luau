@@ -360,13 +360,14 @@ end
 function Tree.writeInstanceTreeToFS(
 	tree: TreeNode, 
 	basePath: string, 
-	clearOld: boolean)
+	clearOld: boolean
+)
 	if clearOld then
 		local dirPath = Util.joinPathParts(basePath, tree.name)
 		if fs.isDir(dirPath) then
 			print("Clearing old version")
-			for _, item in fs.readDir(basePath) do
-				local itemPath = Util.joinPathParts(basePath, item)
+			for _, item in fs.readDir(dirPath) do
+				local itemPath = Util.joinPathParts(dirPath, item)
 				if fs.isDir(itemPath) then
 					fs.removeDir(itemPath)
 				else

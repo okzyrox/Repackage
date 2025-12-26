@@ -265,6 +265,8 @@ local function publishPackage(
 end
 
 local function setup()
+	Config.loadConfig(true)
+
 	local outDir = Config.getOrDefault("outputDirectory")
 	if not fs.isDir(outDir) then
 		fs.writeDir(outDir)
