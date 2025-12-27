@@ -302,6 +302,25 @@ function Tree.constructInstanceTreeFromInstance(
             table.insert(dirChildren, node)
         end
 
+		if hasTags or hasAttributes then
+			local metaExists = false
+			for _, child in dirChildren do
+				if child.name == "init.meta.json" then
+					metaExists = true
+					break
+				end
+			end
+			if not metaExists then
+				table.insert(dirChildren, {
+					type = "file",
+					name = "init.meta.json",
+					content = serde.encode("json", {
+						["properties"] = Tree.getInstanceProperties(instance)
+					})
+				})
+			end
+		end
+
         return {
             type = "directory",
             name = instance.Name,
@@ -402,6 +421,34 @@ function Tree.constructInstanceFromTreeNode(
 					for _, childNode in node.children do
 						local childInstance = Tree.constructInstanceFromTreeNode(childNode)
 						childInstance.Parent = scriptInstance
+					end
+				end
+
+				if initMetaNode then
+					local metaJson = serde.decode("json", initMetaNode.content or "{}")
+					local properties = metaJson["properties"] or {}
+					for propName, propValue in properties do
+						if propName == "Attributes" then
+							for attrName, attrValue in propValue do
+								for attrType, attrTrueValue in attrValue do
+									scriptInstance:SetAttribute(attrName, attrTrueValue)
+								end
+							end
+							continue
+						elseif propName == "Tags" then
+							for _, tagName in propValue do
+								scriptInstance:AddTag(tagName)
+							end
+							continue
+						end
+
+						pcall(function()
+							if type(propValue) == "table" then
+								scriptInstance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
+							else
+								scriptInstance[propName] = propValue
+							end
+						end)
 					end
 				end
 				
