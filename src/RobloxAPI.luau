@@ -22,6 +22,7 @@ local PACKAGE_CONTENT_TYPE = "model/x-rbxm"
 --// Module
 
 local RobloxAPI = {}
+RobloxAPI.PACKAGE_CONTENT_TYPE = PACKAGE_CONTENT_TYPE
 
 function RobloxAPI.getLocalPackagePath(
 	packageName: string
