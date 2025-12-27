@@ -535,7 +535,7 @@ function Tree.constructInstanceFromTreeNode(
 
 				pcall(function()
 					if type(propValue) == "table" then
-						print(Tree.getDataTypeFromPropertyValue(propValue), propValue)
+						Util.dprint(Tree.getDataTypeFromPropertyValue(propValue), propValue)
 						instance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
 					else
 						instance[propName] = propValue
