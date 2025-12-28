@@ -48,6 +48,9 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
 - [ ] Reverting
     - requires mapping comparison
 
+## Todo - Internal
+- Reduce duplication
+
 ## Limitations
 
 Currently cannot handle anything other than:

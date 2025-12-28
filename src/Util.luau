@@ -107,6 +107,51 @@ function Util.stringCombine(
 	return table.concat(parts, separator)
 end
 
+function Util.stringStartsWith(
+	string: string,
+	prefix: string
+): boolean
+	return string:sub(1, #prefix) == prefix
+end
+
+function Util.stringIsAlphanumeric(
+	string: string
+): boolean
+	if string:match("^%w+$") then
+		return true
+	else
+		return false
+	end
+end
+
+function Util.stringChars(
+	string: string
+): {string}
+	local chars: {string} = {}
+	for i = 1, #string do
+		table.insert(chars, string:sub(i, i))
+	end
+	return chars
+end
+
+function Util.matchesFilter(
+	strings: {string},
+	filterFunc: (string: string) -> boolean
+): boolean
+	local matching = true
+	for _, str in strings do
+		if not filterFunc(str) then
+			return false
+		else
+			matching = true
+		end
+	end
+	if matching then
+		return true
+	end
+	return false
+end
+
 function Util.stringEndsWith(
 	string: string,
 	suffix: string

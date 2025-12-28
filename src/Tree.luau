@@ -10,7 +10,6 @@ local serde = require("@lune/serde")
 
 local TreeDataTypes = require("./TreeDataTypes")
 local Util = require("./Util")
-
 local DMPLib = require("./Lib/diff_match_patch")
 
 --// Types
@@ -168,6 +167,38 @@ function Tree.getInstanceProperties(
 	return properties
 end
 
+function Tree.addInstanceProperties(
+	instance: Instance,
+	properties: {[string]: any}
+)
+	for propName, propValue in properties do
+		if propName == "Attributes" then
+			for attrName, attrValue in propValue do
+				if not TreeDataTypes.validateAttributeName(attrName) then
+					error("Invalid attribute name: " .. attrName)
+				end
+				for attrType, attrTrueValue in attrValue do
+					instance:SetAttribute(attrName, attrTrueValue)
+				end
+			end
+			continue
+		elseif propName == "Tags" then
+			for _, tagName in propValue do
+				instance:AddTag(tagName)
+			end
+			continue
+		end
+
+		pcall(function()
+			if type(propValue) == "table" then
+				instance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
+			else
+				instance[propName] = propValue
+			end
+		end)
+	end
+end
+
 function Tree.constructInstanceTreeFromInstance(
 	instance: Instance | {Instance}, 
 	packageName: string?, 
@@ -223,22 +254,6 @@ function Tree.constructInstanceTreeFromInstance(
 				name = instance.Name,
 				children = {}
 			}
-		-- hack until we can handle userdata better
-		-- although with Content in specific its gonna be a pain; especially with recreating the package
-		-- elseif instance.ClassName == "Sound" then
-		-- 	return {
-		-- 		type = "file",
-		-- 		name = instance.Name .. ".meta.json",
-		-- 		content = serde.encode("json", {
-		-- 			["$className"] = instance.ClassName,
-		-- 			["$properties"] = {
-		-- 				SoundId = (instance :: Sound).AudioContent.Uri,
-		-- 				Volume = (instance :: Sound).Volume,
-		-- 				Looped = (instance :: Sound).Looped,
-		-- 				Playing = (instance :: Sound).Playing,
-		-- 			}
-		-- 		})
-		-- 	}
 		else
 			return {
 				type = "file",
@@ -431,29 +446,7 @@ function Tree.constructInstanceFromTreeNode(
 				if initMetaNode then
 					local metaJson = serde.decode("json", initMetaNode.content or "{}")
 					local properties = metaJson["properties"] or {}
-					for propName, propValue in properties do
-						if propName == "Attributes" then
-							for attrName, attrValue in propValue do
-								for attrType, attrTrueValue in attrValue do
-									scriptInstance:SetAttribute(attrName, attrTrueValue)
-								end
-							end
-							continue
-						elseif propName == "Tags" then
-							for _, tagName in propValue do
-								scriptInstance:AddTag(tagName)
-							end
-							continue
-						end
-
-						pcall(function()
-							if type(propValue) == "table" then
-								scriptInstance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
-							else
-								scriptInstance[propName] = propValue
-							end
-						end)
-					end
+					Tree.addInstanceProperties(scriptInstance, properties)
 				end
 				
 				return scriptInstance
@@ -468,29 +461,7 @@ function Tree.constructInstanceFromTreeNode(
 				instance.Name = node.name
 				
 				local properties = metaJson["properties"] or {}
-				for propName, propValue in properties do
-					if propName == "Attributes" then
-						for attrName, attrValue in propValue do
-							for attrType, attrTrueValue in attrValue do
-								instance:SetAttribute(attrName, attrTrueValue)
-							end
-						end
-						continue
-					elseif propName == "Tags" then
-						for _, tagName in propValue do
-							instance:AddTag(tagName)
-						end
-						continue
-					end
-
-					pcall(function()
-						if type(propValue) == "table" then
-							instance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
-						else
-							instance[propName] = propValue
-						end
-					end)
-				end
+				Tree.addInstanceProperties(instance, properties)
 				
 				for _, childNode in childrenRef do
 					local childInstance = Tree.constructInstanceFromTreeNode(childNode)
@@ -518,30 +489,7 @@ function Tree.constructInstanceFromTreeNode(
 			instance.Name = node.name:gsub("%.meta%.json$", "") -- filter for meta
 			
 			local properties = metaJson["properties"] or {}
-			for propName, propValue in properties do
-				if propName == "Attributes" then
-					for attrName, attrValue in propValue do
-						for attrType, attrTrueValue in attrValue do
-							instance:SetAttribute(attrName, attrTrueValue)
-						end
-					end
-					continue
-				elseif propName == "Tags" then
-					for _, tagName in propValue do
-						instance:AddTag(tagName)
-					end
-					continue
-				end
-
-				pcall(function()
-					if type(propValue) == "table" then
-						Util.dprint(Tree.getDataTypeFromPropertyValue(propValue), propValue)
-						instance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
-					else
-						instance[propName] = propValue
-					end
-				end)
-			end
+			Tree.addInstanceProperties(instance, properties)
 			
 			return instance
 		else

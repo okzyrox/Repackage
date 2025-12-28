@@ -6,6 +6,8 @@
 --// Modules
 local roblox = require("@lune/roblox")
 
+local Util = require("./Util")
+
 --// Types
 
 export type DataTypeHandler<T> = {
@@ -13,12 +15,34 @@ export type DataTypeHandler<T> = {
     Des: (data: any) -> T,
 }
 
-export type DataTypeHandlers = {
-    [string]: DataTypeHandler<any>,
+export type TreeDataTypesT = {
+    ["Axes"]: DataTypeHandler<Axes>,
+    ["Content"]: DataTypeHandler<Content>,
+    ["Color3"]: DataTypeHandler<Color3>,
+    ["CFrame"]: DataTypeHandler<CFrame>,
+    ["UDim"]: DataTypeHandler<UDim>,
+    ["UDim2"]: DataTypeHandler<UDim2>,
+    ["Vector2"]: DataTypeHandler<Vector2>,
+    ["Vector2int16"]: DataTypeHandler<Vector2int16>,
+    ["Vector3"]: DataTypeHandler<Vector3>,
+    ["Vector3int16"]: DataTypeHandler<Vector3int16>,
+    ["NumberRange"]: DataTypeHandler<NumberRange>,
+    ["NumberSequence"]: DataTypeHandler<NumberSequence>,
+
+    validateAttributeName: (attributeName: string) -> boolean,
+}
+
+--// Constants
+
+local ATTRIBUTE_NAME_ALLOWED_CHARS = {
+    ".",
+    "_",
+    "-",
+    "/"
 }
 
 --// Module
-local TreeDataTypes: DataTypeHandlers = {}
+local TreeDataTypes = {}
 
 TreeDataTypes["Axes"] = {
     Ser = function(value: any): any
@@ -298,5 +322,41 @@ TreeDataTypes["NumberSequence"] = {
     end,
 }
 
+function TreeDataTypes.validateAttributeName(attributeName: string): boolean
+    if Util.stringStartsWith(attributeName, "RBX") then
+        Util.warn("Attribute names cannot start with 'RBX'.\nOffending attribute: " .. attributeName)
+        return false
+    end
 
-return TreeDataTypes
+    if #attributeName == 0 then
+        Util.warn("Attribute names cannot be empty.")
+        return false
+    end
+
+    if #attributeName > 100 then
+        Util.warn("Attribute names cannot be longer than 100 characters.\nOffending attribute: " .. attributeName)
+        return false
+    end
+
+    local function charIsValid(char: string): boolean
+        if Util.stringIsAlphanumeric(char) then
+            return true
+        end
+
+        if table.find(ATTRIBUTE_NAME_ALLOWED_CHARS, char) then
+            return true
+        end
+
+        return false
+    end
+
+    local attributeChars = Util.stringChars(attributeName)
+    if not Util.matchesFilter(attributeChars, charIsValid) then
+        Util.warn("Attribute names can only contain alphanumeric characters, or any of these characters: " .. Util.stringCombine(ATTRIBUTE_NAME_ALLOWED_CHARS, " ") .. ". \nOffending attribute: " .. attributeName)
+        return false
+    end
+
+    return true
+end
+
+return TreeDataTypes :: TreeDataTypesT
