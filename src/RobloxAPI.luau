@@ -14,7 +14,102 @@ local Config = require("./Config")
 local API = require("./API")
 
 --// Types
-export type PUBLISH_STATE = "NO-CHANGES" | "SUCCESS" | "FAILED" | "PENDING"
+export type PublishState = "NO-CHANGES" | "SUCCESS" | "FAILED" | "PENDING"
+
+export type ModerationState = "Reviewing" | "Approved" | "Rejected"
+export type AssetPrivacy = "default" | "restricted" | "openUse"
+export type AssetState = "Unspecified" | "Active" | "Archived"
+
+export type Error = {
+	code: number,
+	message: string
+}
+
+export type ContentError = {
+	Code: number,
+	Message: string,
+	CustomErrorCode: number
+}
+
+export type Creator = {
+	userId: number?,
+	groupId: number?,
+}
+
+export type CreationContext = {
+	assetPrivacy: AssetPrivacy,
+	creator: Creator?,
+}
+
+export type ModerationResult = {
+	moderationState: ModerationState,
+}
+
+export type AssetPreview = {
+	asset: string,
+	altText: string
+}
+
+export type ContentRepresentationSpecifier = {
+	format: string,
+	majorVersion: string,
+	fidelity: string
+}
+
+export type ContentAssetMetadata = {
+	metadataType: number,
+	value: string
+}
+
+export type AssetMetadata = {
+	assetType: string,
+	assetId: number,
+	creationContext: CreationContext,
+	description: string,
+	displayName: string,
+	path: string,
+	revisionId: string,
+	revisionCreateTime: string,
+	moderationResult: ModerationResult,
+	icon: string,
+	previews: {AssetPreview},
+	state: AssetState,
+	socialLink: {}
+}
+
+export type AssetVersionMetadata = {
+	creationContext: CreationContext,
+	path: string,
+	moderationResult: ModerationResult,
+	published: boolean
+}
+
+export type OperationResult<T> = {
+	path: string,
+	done: boolean,
+	error: Error,
+	response: T
+}
+
+export type ContentResponse = {
+	location: string,
+	errors: {ContentError},
+	requestId: string,
+	isArchived: boolean,
+	assetTypeId: number,
+	contentRepresentationSpecifier: ContentRepresentationSpecifier,
+	assetMetadatas: {ContentAssetMetadata},
+	isRecordable: boolean
+}
+
+export type AssetUpdateResponse = OperationResult<AssetMetadata> & {
+	operationId: string
+}
+
+export type AssetVersionsResponse = {
+	assetVersions: {AssetVersionMetadata},
+	nextPageToken: string?
+}
 
 --// Constants
 local PACKAGE_CONTENT_TYPE = "model/x-rbxm"
@@ -47,7 +142,7 @@ end
 function RobloxAPI.getAssetMeta(
     assetId: string, 
     versionId: string?
-): string?
+): AssetMetadata?
 	local replacements = {ASSET_ID = assetId}
 	local urlData: API.URL = API.URLS.GET_META
 	if versionId then
@@ -61,7 +156,7 @@ function RobloxAPI.getAssetMeta(
 		nil
 	)
 
-	local jsonResponse = serde.decode("json", response)
+	local jsonResponse: AssetMetadata = serde.decode("json", response)
 	if statusCode == 200 then
 		return jsonResponse
 	else
@@ -78,7 +173,7 @@ end
 function RobloxAPI.getPackageMeta(
 	packageName: string, 
 	versionId: string?
-): string?
+): AssetMetadata?
 	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
 	if not packagePath then
 		Util.warn("Package not found with name:", packageName)
@@ -108,7 +203,7 @@ end
 function RobloxAPI.getPackageContent(
     assetId: string, 
     versionId: string?
-): string?
+): ContentResponse?
 	local urlData: API.URL
 	local replacements = {ASSET_ID = assetId}
 
@@ -125,7 +220,7 @@ function RobloxAPI.getPackageContent(
 		nil
 	)
 
-	local jsonResponse = serde.decode("json", response)
+	local jsonResponse: ContentResponse = serde.decode("json", response)
 	if statusCode == 200 then
 		local assetTypeId = jsonResponse["assetTypeId"]
 		if assetTypeId ~= 10 then
@@ -143,14 +238,14 @@ end
 --/ Get versions of an asset
 function RobloxAPI.getPackageVersions(
     assetId: string
-): any?
+): AssetVersionsResponse?
 	local statusCode, response = API.makeRequest(
 		API.URLS.GET_VERSIONS,
 		{ASSET_ID = assetId},
 		nil
 	)
 
-	local jsonResponse = serde.decode("json", response)
+	local jsonResponse: AssetVersionsResponse = serde.decode("json", response)
 	if statusCode == 200 then
 		return jsonResponse
 	else
@@ -171,7 +266,7 @@ function RobloxAPI.getPackageTree(
 	end
 	local packageName: string = meta["displayName"]
 	local packageRevisionId: string = meta["revisionId"]
-	local content: any? = RobloxAPI.getPackageContent(assetId, versionId)
+	local content: ContentResponse? = RobloxAPI.getPackageContent(assetId, versionId)
 	if content then
 		local dataLocation = content["location"]
 		local _statusCode, response = API.makeRequest(
@@ -266,7 +361,7 @@ end
 function RobloxAPI.publishToPackage(
     packageName: string, 
     _revisionNote: string?
-): (PUBLISH_STATE, string?)
+): (PublishState, string?)
 	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
 	if not packagePath then
 		Util.warn("Package not found with name:", packageName)
@@ -310,7 +405,7 @@ function RobloxAPI.publishToPackage(
 	-- print(response)
 
 	if statusCode == 200 then
-		local jsonResponse = serde.decode("json", response)
+		local jsonResponse: AssetUpdateResponse = serde.decode("json", response)
 		local taskDone = jsonResponse["done"] or false
 		local operationId = jsonResponse["operationId"] or nil
 
@@ -392,7 +487,7 @@ function RobloxAPI.checkOperationStatus(
 	)
 
 	if statusCode == 200 then
-		local jsonResponse = serde.decode("json", response)
+		local jsonResponse: OperationResult<AssetMetadata?> = serde.decode("json", response)
 		local operationDone = jsonResponse["done"] or false
 
 		if operationDone == false then

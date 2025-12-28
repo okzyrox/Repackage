@@ -190,16 +190,22 @@ local function getPackageRevisions(
 		local pathParts = basePath:split("/")
 		local versionNumberStr = pathParts[#pathParts]
 		local versionDate = versionData["createTime"]
+		local versionPublished = versionData["published"]
 
 		table.insert(assetVersions, {
 			revisionId = tonumber(versionNumberStr),
 			revisionDate = versionDate,
+			isPublished = versionPublished
 		})
 	end
 
 	print("Latest Revisions for", meta["displayName"])
 	for _, versionInfo in assetVersions do
-		print(colored(" ID: " .. versionInfo.revisionId .. " | Date: " .. versionInfo.revisionDate, "light_grey"))
+		print(
+			colored(" Revision: " .. versionInfo.revisionId, "yellow"),
+			colored("| Date: " .. versionInfo.revisionDate, "grey"),
+			colored(versionInfo.isPublished and "| Published" or "", "green")
+		)
 	end
 end
 
