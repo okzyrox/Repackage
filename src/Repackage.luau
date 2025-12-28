@@ -8,6 +8,7 @@ local fs = require("@lune/fs")
 local process = require("@lune/process")
 local serde = require("@lune/serde")
 local stdio = require("@lune/stdio")
+local task = require("@lune/task")
 
 local Tree = require("./Tree")
 local Util = require("./Util")
@@ -261,6 +262,48 @@ local function publishPackage(
 		print(colored("Failed to publish package: " .. packageName, "red"))
 	elseif publishStatus == "PENDING" then
 		print(colored("Package publish is pending. Operation ID: " .. tostring(operationId), "yellow"))
+
+		local monitorDelay = 15.0
+		local result = nil
+		while true do
+			result = RobloxAPI.checkOperationStatus(operationId)
+			if result == true then
+				print(colored("Package published successfully: " .. packageName, "green"))
+				break
+			elseif result == false then
+				print("Pending...")
+			elseif result == nil then
+				print(colored("Failed to publish package: " .. packageName), "red")
+				break
+			end
+
+			task.wait(monitorDelay)
+		end
+
+		if result == true then
+			local packageMeta = RobloxAPI.getPackageMeta(packageName)
+			if packageMeta == nil then
+				Util.warn("Could not retrieve package meta after publish.")
+				return
+			end
+
+			-- generational code
+			local latestRevisionId = tonumber(packageMeta["revisionId"] or "0") or 0
+			if latestRevisionId == 0 then
+				Util.warn("Could not determine new revision ID after publish.")
+				return
+			end
+			local updated = RobloxAPI.updateLocalPackageMeta(
+				packageName, 
+				latestRevisionId
+			)
+
+			if updated then
+				print(colored("Updated package meta to revision: " .. latestRevisionId, "green"))
+			else
+				Util.warn("Failed to update package meta to new revision:", latestRevisionId)
+			end
+		end
 	end
 end
 

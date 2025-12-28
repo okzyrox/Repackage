@@ -36,9 +36,19 @@ end
 
 function Util.printInstance(
 	instance: Instance, 
-	indent: string
+	indent: string,
+	last: boolean?
 )
-	print(indent .. instance.Name .. " (" .. instance.ClassName .. ")")
+	if last == nil then
+		last = true
+	end
+	
+	local prefix = indent
+	local connector = last and "└── " or "├── "
+	local connectorExtras = last and "    " or "│   "
+	
+	print(prefix .. connector .. instance.Name .. " (" .. instance.ClassName .. ")")
+	
 	local extraProps = PrintExtraProperties[instance.ClassName]
 	if extraProps then
 		for _, propName in extraProps do
@@ -46,25 +56,30 @@ function Util.printInstance(
 				return instance[propName]
 			end)
 			if success and value then
-				print(indent .. "  |" .. propName .. " = " .. tostring(value))
+				local pPrefix = indent .. (connectorExtras)
+				print(pPrefix .. "│ " .. propName .. " = " .. tostring(value))
 			end
 		end
 	end
 
 	local tags = instance:GetTags()
 	if #tags > 0 then
-		print(indent .. "  |Tags: " .. table.concat(tags, ", "))
+		local tPrefix = indent .. (connectorExtras)
+		print(tPrefix .. "│ Tags: " .. table.concat(tags, ", "))
 	end
 
 	local attributes = instance:GetAttributes()
 	for attrName, attrValue in attributes do
-		print(indent .. "  |Attribute: " .. attrName .. " = " .. tostring(attrValue))
+		local aPrefix = indent .. (connectorExtras)
+		print(aPrefix .. "│ Attribute: " .. attrName .. " = " .. tostring(attrValue))
 	end
 
 	local Children = instance:GetChildren()
 	if #Children > 0 then
-		for _, child in Children do
-			Util.printInstance(child, indent .. "  ")
+		local cPrefix = indent .. (connectorExtras)
+		for i, child in Children do
+			local isLastChild = i == #Children
+			Util.printInstance(child, cPrefix, isLastChild)
 		end
 	end
 end
@@ -162,25 +177,25 @@ end
 function Util.joinPathParts(
 	...: string
 ): string
-    local parts = { ... }
-    local result = ""
+	local parts = { ... }
+	local result = ""
 
-    for i, part in parts do
-        if type(part) == "string" and part ~= "" then
-            if i > 1 then
-                part = part:gsub("^/+", "")
-            end
-            part = part:gsub("/+$", "")
+	for i, part in parts do
+		if type(part) == "string" and part ~= "" then
+			if i > 1 then
+				part = part:gsub("^/+", "")
+			end
+			part = part:gsub("/+$", "")
 
-            if result == "" then
-                result = part
-            else
-                result = result .. "/" .. part
-            end
-        end
-    end
+			if result == "" then
+				result = part
+			else
+				result = result .. "/" .. part
+			end
+		end
+	end
 
-    return result
+	return result
 end
 
 function Util.tableCount(

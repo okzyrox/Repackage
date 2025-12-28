@@ -74,6 +74,36 @@ function RobloxAPI.getAssetMeta(
 	end
 end
 
+--/ Get Asset Meta v/ Package
+function RobloxAPI.getPackageMeta(
+	packageName: string, 
+	versionId: string?
+): string?
+	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
+	if not packagePath then
+		Util.warn("Package not found with name:", packageName)
+		return nil
+	end
+
+	local metaPath = Util.joinPathParts(packagePath, Tree.PACKAGE_META_FILE_PATH)
+	local metaContent = fs.readFile(metaPath)
+	local success, packageMeta = pcall(function()
+		return serde.decode("json", metaContent)
+	end)
+
+	if not success then
+		Util.warn("Failed to read package meta for package:", packageName)
+		return nil
+	end
+
+	local assetId: string = packageMeta["packageAssetId"]
+	if not assetId then
+		Util.warn("Malformed package meta, missing package asset id:", packageName)
+		return nil
+	end
+	return RobloxAPI.getAssetMeta(assetId, versionId)
+end
+
 --/ Get Package Content Data 
 function RobloxAPI.getPackageContent(
     assetId: string, 
@@ -295,6 +325,85 @@ function RobloxAPI.publishToPackage(
 	else
 		Util.warn("Failed to publish package:", packageName, "Status Code:", statusCode, "Response:", response)
 		return "FAILED", nil
+	end
+end
+
+--/ Get package meta from local package
+function RobloxAPI.getLocalPackageMeta(
+	packageName: string
+): Tree.TreeNode?
+	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
+	if not packagePath then
+		Util.warn("Package not found with name:", packageName)
+		return nil
+	end
+
+	local metaPath = Util.joinPathParts(packagePath, Tree.PACKAGE_META_FILE_PATH)
+	local metaContent = fs.readFile(metaPath)
+	local success, packageMeta = pcall(function()
+		return serde.decode("json", metaContent)
+	end)
+
+	if not success then
+		Util.warn("Failed to read package meta for package:", packageName)
+		return nil
+	end
+
+	return packageMeta
+end
+
+--/ Update package meta revision ID in local package
+function RobloxAPI.updateLocalPackageMeta(
+	packageName: string,
+	revisionId: string
+): boolean
+	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
+	if not packagePath then
+		Util.warn("Package not found with name:", packageName)
+		return false
+	end
+
+	local metaFilePath = Util.joinPathParts(packagePath, Tree.PACKAGE_META_FILE_PATH)
+	local metaContent = fs.readFile(metaFilePath)
+	local success, metaData = pcall(function()
+		return serde.decode("json", metaContent)
+	end)
+
+	if not success then
+		Util.warn("Failed to read package meta for package:", packageName)
+		return false
+	end
+
+	metaData["packageRevisionId"] = revisionId
+
+	local updatedMetaContent = serde.encode("json", metaData, true)
+	fs.writeFile(metaFilePath, updatedMetaContent)
+	return true
+end
+
+--/ Check operation "done" status
+function RobloxAPI.checkOperationStatus(
+	operationId: string
+): boolean?
+	local statusCode, response = API.makeRequest(
+		API.URLS.GET_OPERATION_RESULT,
+		{OPERATION_ID = operationId},
+		nil
+	)
+
+	if statusCode == 200 then
+		local jsonResponse = serde.decode("json", response)
+		local operationDone = jsonResponse["done"] or false
+
+		if operationDone == false then
+			return false
+		else
+			print("Operation completed:", operationId)
+			return true
+		end
+	else
+		Util.warn("Failed to check status for operation:", operationId, "Status Code:", statusCode, "Response:", response)
+		return nil
 	end
 end
 
