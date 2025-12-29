@@ -40,7 +40,7 @@ jobs:
         run: lune build ${{ inputs.outFile }} --o bundle/Repackage.exe 
           
       - name: Upload Bundle Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Repackage
           path: bundle/Repackage.exe
