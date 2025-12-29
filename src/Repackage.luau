@@ -8,6 +8,7 @@ local fs = require("@lune/fs")
 local process = require("@lune/process")
 local serde = require("@lune/serde")
 local stdio = require("@lune/stdio")
+local task = require("@lune/task")
 
 local Tree = require("./Tree")
 local Util = require("./Util")
@@ -80,12 +81,12 @@ local function updateLocalPackage(
 	local outDir = Config.get("outputDirectory")
 	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
 	if not packagePath then
-		warn("Package not found with name:", packageName)
+		Util.warn("Package not found with name:", packageName)
 		return
 	end
 	local packageMetaPath = Util.joinPathParts(packagePath, Tree.PACKAGE_META_FILE_PATH)
 	if not fs.isFile(packageMetaPath) then
-		warn("Package meta file not found in package folder:", packageMetaPath)
+		Util.warn("Package meta file not found in package folder:", packageMetaPath)
 		return
 	end
 	local packageMetaContent = fs.readFile(packageMetaPath)
@@ -93,7 +94,7 @@ local function updateLocalPackage(
 		return serde.decode("json", packageMetaContent)
 	end)
 	if not success then
-		warn("Could not read package meta at path:", packageMetaPath)
+		Util.warn("Could not read package meta at path:", packageMetaPath)
 		return
 	end
 
@@ -120,7 +121,7 @@ local function updateLocalPackage(
 	local packageRevisionId: string? = packageData["packageRevisionId"]
 	local packageNameNew, treeNew = RobloxAPI.getPackageTree(assetId)
 	if not treeNew or not packageNameNew then
-		warn("Failed to retrieve updated package tree.")
+		Util.warn("Failed to retrieve updated package tree.")
 		return
 	end
 
@@ -140,7 +141,7 @@ local function getPackageInfo(
 )
 	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
 	if not packagePath then
-		warn("Package not found with name:", packageName)
+		Util.warn("Package not found with name:", packageName)
 		return
 	end
 
@@ -178,7 +179,7 @@ local function getPackageRevisions(
 )
 	local meta = RobloxAPI.getAssetMeta(assetId)
 	if not meta then
-		warn("Could not get package meta for asset with ID:", assetId)
+		Util.warn("Could not get package meta for asset with ID:", assetId)
 		return
 	end
 
@@ -189,16 +190,22 @@ local function getPackageRevisions(
 		local pathParts = basePath:split("/")
 		local versionNumberStr = pathParts[#pathParts]
 		local versionDate = versionData["createTime"]
+		local versionPublished = versionData["published"]
 
 		table.insert(assetVersions, {
 			revisionId = tonumber(versionNumberStr),
 			revisionDate = versionDate,
+			isPublished = versionPublished
 		})
 	end
 
 	print("Latest Revisions for", meta["displayName"])
 	for _, versionInfo in assetVersions do
-		print(colored(" ID: " .. versionInfo.revisionId .. " | Date: " .. versionInfo.revisionDate, "light_grey"))
+		print(
+			colored(" Revision: " .. versionInfo.revisionId, "yellow"),
+			colored("| Date: " .. versionInfo.revisionDate, "grey"),
+			colored(versionInfo.isPublished and "| Published" or "", "green")
+		)
 	end
 end
 
@@ -261,6 +268,53 @@ local function publishPackage(
 		print(colored("Failed to publish package: " .. packageName, "red"))
 	elseif publishStatus == "PENDING" then
 		print(colored("Package publish is pending. Operation ID: " .. tostring(operationId), "yellow"))
+
+		local shouldWait = Config.getOrDefault("publishAwaitOperation")
+		if not shouldWait then
+			return
+		end
+
+		local monitorDelay = 15.0
+		local result = nil
+		while true do
+			result = RobloxAPI.checkOperationStatus(operationId)
+			if result == true then
+				print(colored("Package published successfully: " .. packageName, "green"))
+				break
+			elseif result == false then
+				print("Pending...")
+			elseif result == nil then
+				print(colored("Failed to publish package: " .. packageName), "red")
+				break
+			end
+
+			task.wait(monitorDelay)
+		end
+
+		if result == true then
+			local packageMeta = RobloxAPI.getPackageMeta(packageName)
+			if packageMeta == nil then
+				Util.warn("Could not retrieve package meta after publish.")
+				return
+			end
+
+			-- generational code
+			local latestRevisionId = tonumber(packageMeta["revisionId"] or "0") or 0
+			if latestRevisionId == 0 then
+				Util.warn("Could not determine new revision ID after publish.")
+				return
+			end
+			local updated = RobloxAPI.updateLocalPackageMeta(
+				packageName, 
+				latestRevisionId
+			)
+
+			if updated then
+				print(colored("Updated package meta to revision: " .. latestRevisionId, "green"))
+			else
+				Util.warn("Failed to update package meta to new revision:", latestRevisionId)
+			end
+		end
 	end
 end
 

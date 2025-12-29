@@ -1,8 +1,15 @@
 .vscode/**
 
-*.bat
+# Debug
 debug/**
 output/**
 secrets/**
+tests/**
 
+# Bundle
+*.bat
+bundle/Bundled.luau
+*.exe
+
+# Repackage
 repackage.config.json

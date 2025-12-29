@@ -1,0 +1,46 @@
+name: Bundle
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  
+  workflow_call:
+    inputs:
+      srcFile:
+        type: string
+        required: false
+        default: 'src/Repackage.luau'
+      outFile:
+        type: string
+        required: false
+        default: 'bundle/Bundled.luau'
+      configFile:
+        type: string
+        required: false
+        default: 'bundle/darklua.config'
+
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v3
+      - uses: CompeyDev/setup-rokit@v0.1.2
+        with:
+          version: v1.2.0
+          cache: false
+          token: ${{ github.token }}
+      
+      - name: Bundle Files
+        run: darklua process ${{ inputs.srcFile }} ${{ inputs.outFile }} -c ${{ inputs.configFile }}
+
+      - name: Build Executable
+        run: lune build ${{ inputs.outFile }} --o bundle/Repackage.exe 
+          
+      - name: Upload Bundle Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Repackage
+          path: bundle/Repackage.exe

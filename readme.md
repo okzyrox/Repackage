@@ -14,6 +14,9 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
   "outputDirectory": "output/", // a folder 
   // -- where local packages should be downloaded to
 
+  "publishedAwaitOperation": true, // true / false
+  // if true, then the Repackage will stall until the package has been confirmed to be published
+
   "secrets": {
     "secretsEnvKey": "ROBLOX_API_KEY", // a environment variable 
     // -- the name of the environment variable with the API KEY
@@ -42,27 +45,26 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
 - [x] Publishing to package
     - [ ] All / Specified
     - [ ] Package revision notes
-    - [ ] Update local package meta on update
+    - [x] Update local package meta on update
     - [ ] Check if newer version exists; stash changes in some way
         - [ ] Repackage temp folder config
 - [ ] Reverting
     - requires mapping comparison
 
+## Todo - Internal
+- [ ] Reduce duplication
+
 ## Limitations
 
-Currently cannot handle anything other than:
-    - Scripts (LocalScript, ModuleScript and Script)
-    - Animations
-    - Sounds
-if a package contains something not in this list, then it will not be saved to a file.
+- Packages with special characters in the name will not be supported
+
+Can handle most datatypes and objects, although I dont recommend storing your assets and code in the same package, as it makes the file structure messy
 
 Requires a specific structure for packages;
-- The package's "main" instance must be a Folder (the instance with the PackageLink inside)
+- The package's "main" instance must be a Folder or Folder-like (the instance with the PackageLink inside)
 
 ## Known issues
 
 - Commands are limited
 - Internal returned values are all over the place (my bad..)
 - No user-facing access to downloading specific versions of packages
-- Publishing a package doesnt update the local package tree:
-    - although since the operation can take a variable amount of time doing this via a wait is probably bad

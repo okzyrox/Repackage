@@ -146,6 +146,12 @@ function API.makeRequest(
 		body = body,
 	})
 
+	if response.statusCode ~= 200 then
+		Util.dprint("Request to URL failed:", url)
+		Util.dprint("Status Code:", response.statusCode)
+		Util.dprint("Response Body:", response.body)
+	end
+
 	return response.statusCode, response.body
 end
 
