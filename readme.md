@@ -14,6 +14,9 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
   "outputDirectory": "output/", // a folder 
   // -- where local packages should be downloaded to
 
+  "publishedAwaitOperation": true, // true / false
+  // if true, then the Repackage will stall until the package has been confirmed to be published
+
   "secrets": {
     "secretsEnvKey": "ROBLOX_API_KEY", // a environment variable 
     // -- the name of the environment variable with the API KEY

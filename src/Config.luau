@@ -13,11 +13,13 @@ local Util = require("./Util")
 
 export type ConfigOption = 
 	"outputDirectory" |
+	"publishAwaitOperation" |
 	"secrets" |
 	"debugLogs"
 
 export type Config = {
-	[ConfigOption]: any
+	[ConfigOption]: any,
+	secrets: SecretsConfig,
 }
 
 export type SecretsConfig = {
@@ -32,6 +34,7 @@ local PACKAGE_CONFIG_FILE = "repackage.config.json"
 
 local DEFAULT_CONFIG: Config = {
 	outputDirectory = "output/",
+	publishAwaitOperation = true,
 
 	secrets = {
 		secretsType = "file", -- file | env

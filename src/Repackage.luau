@@ -269,6 +269,11 @@ local function publishPackage(
 	elseif publishStatus == "PENDING" then
 		print(colored("Package publish is pending. Operation ID: " .. tostring(operationId), "yellow"))
 
+		local shouldWait = Config.getOrDefault("publishAwaitOperation")
+		if not shouldWait then
+			return
+		end
+
 		local monitorDelay = 15.0
 		local result = nil
 		while true do
