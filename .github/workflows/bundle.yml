@@ -5,21 +5,6 @@ on:
       - main
     tags:
       - 'v*.*.*'
-  
-  workflow_call:
-    inputs:
-      srcFile:
-        type: string
-        required: false
-        default: 'src/Repackage.luau'
-      outFile:
-        type: string
-        required: false
-        default: 'bundle/Bundled.luau'
-      configFile:
-        type: string
-        required: false
-        default: 'bundle/darklua.config'
 
 
 jobs:
@@ -34,10 +19,10 @@ jobs:
           token: ${{ github.token }}
       
       - name: Bundle Files
-        run: darklua process ${{ inputs.srcFile }} ${{ inputs.outFile }} -c ${{ inputs.configFile }}
+        run: darklua process src/Repackage.luau bundle/Bundled.luau -c bundle/darklua.config
 
       - name: Build Executable
-        run: lune build ${{ inputs.outFile }} --o bundle/Repackage.exe 
+        run: lune build bundle/Bundled.luau --o bundle/Repackage.exe 
           
       - name: Upload Bundle Artifact
         uses: actions/upload-artifact@v4
