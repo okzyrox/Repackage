@@ -3,8 +3,13 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*.*.*'
+    paths:
+      - 'src/**'
+      - '.github/workflows/**'
+      - 'bundle/darklua.config'
+      - 'rokit.toml'
+      - 'selene.toml'
+
 
 
 jobs:
@@ -22,7 +27,7 @@ jobs:
         run: darklua process src/Repackage.luau bundle/Bundled.luau -c bundle/darklua.config
 
       - name: Build Executable
-        run: lune build bundle/Bundled.luau --o bundle/Repackage.exe 
+        run: lune build bundle/Bundled.luau -o bundle/Repackage.exe 
           
       - name: Upload Bundle Artifact
         uses: actions/upload-artifact@v4
