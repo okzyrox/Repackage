@@ -112,6 +112,36 @@ TreeDataTypes["Color3"] = {
     end,
 }
 
+TreeDataTypes["ColorSequence"] = {
+    Ser = function(value: any): any
+        local colorSequence = value :: ColorSequence
+        local keypointsData: {any} = {}
+        for _, keypoint in colorSequence.Keypoints do
+            table.insert(keypointsData, {
+                time = keypoint.Time,
+                color = {keypoint.Value.R, keypoint.Value.G, keypoint.Value.B},
+            })
+        end
+        return {
+            keypoints = keypointsData,
+        }
+    end,
+    Des = function(data: any): ColorSequence
+        local keypointsData = data["keypoints"] :: {any}
+        local keypoints: {ColorSequenceKeypoint} = {}
+        for _, keypointData in keypointsData do
+            local time = keypointData["time"] :: number
+            local valueData = keypointData["color"] :: {number}
+            local r = valueData[1] :: number
+            local g = valueData[2] :: number
+            local b = valueData[3] :: number
+            local value = roblox.Color3.new(r, g, b)
+            table.insert(keypoints, roblox.ColorSequenceKeypoint.new(time, value))
+        end
+        return roblox.ColorSequence.new(keypoints)
+    end,
+}
+
 TreeDataTypes["CFrame"] = {
     Ser = function(value: any): any
         local cframe = value :: CFrame
@@ -151,6 +181,48 @@ TreeDataTypes["CFrame"] = {
             R10, R11, R12,
             R20, R21, R22
         )
+    end,
+}
+
+TreeDataTypes["Font"] = {
+    Ser = function(value: any): any
+        local font = value :: Font
+        return {
+            family = font.Family,
+            weight = font.Weight.Name,
+            style = font.Style.Name,
+        }
+    end,
+    Des = function(data: any): Font
+        local family = data["family"] :: string
+        local weightName = data["weight"] :: string
+        local styleName = data["style"] :: string
+
+        local weight = roblox.Enum.FontWeight[weightName] :: Enum.FontWeight
+        local style = roblox.Enum.FontStyle[styleName] :: Enum.FontStyle
+
+        return roblox.Font.fromId(
+            tonumber(family),
+            weight,
+            style
+        )
+    end,
+}
+
+TreeDataTypes["Instance"] = {
+    Ser = function(value: any): any
+        local instance = value :: Instance
+        Util.warn("Instance reference serialisation is not supported.")
+        return {
+            className = instance.ClassName,
+            name = instance.Name,
+        }
+    end,
+    Des = function(data: any): Instance
+        local className = data["className"] :: string
+        local instance = roblox.Instance.new(className)
+        instance.Name = data["name"] :: string
+        return instance
     end,
 }
 

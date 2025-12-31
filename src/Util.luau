@@ -84,6 +84,13 @@ function Util.printInstance(
 	end
 end
 
+function Util.safeDirName(
+	name: string
+): string
+	local safeName = name:gsub("[<>:\"/\\|%?%*]", "_")
+	return safeName
+end
+
 function Util.getScriptTypeFromName(
 	fileName: string
 ): string?

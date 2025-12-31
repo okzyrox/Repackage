@@ -66,7 +66,7 @@ local function createPackage(
 		return
 	end
 
-	local packageOutDir = Util.joinPathParts(outDir, packageName .. ".Package")
+	local packageOutDir = Util.joinPathParts(outDir, Util.safeDirName(packageName .. ".Package"))
 	local packageMetaFile = Util.joinPathParts(packageOutDir, Tree.PACKAGE_META_FILE_PATH)
 
 	Tree.writeInstanceTreeToFS(tree, outDir, true)

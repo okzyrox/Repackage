@@ -524,7 +524,7 @@ function Tree.writeInstanceTreeToFS(
 	clearOld: boolean
 )
 	if clearOld then
-		local dirPath = Util.joinPathParts(basePath, tree.name)
+		local dirPath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
 		if fs.isDir(dirPath) then
 			print("Clearing old version")
 			for _, item in fs.readDir(dirPath) do
@@ -539,7 +539,7 @@ function Tree.writeInstanceTreeToFS(
 	end
 
 	if tree.type == "directory" then
-		local dirPath = Util.joinPathParts(basePath, tree.name)
+		local dirPath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
 		Util.dprint("Writing: ", dirPath)
 		fs.writeDir(dirPath)
 
@@ -549,7 +549,7 @@ function Tree.writeInstanceTreeToFS(
 			end
 		end
 	elseif tree.type == "file" then
-		local filePath = Util.joinPathParts(basePath, tree.name)
+		local filePath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
 		Util.dprint("Writing: ", filePath)
 		if tree.content then
 			fs.writeFile(filePath, tree.content)

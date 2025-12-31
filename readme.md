@@ -51,17 +51,20 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
 - [ ] Reverting
     - requires mapping comparison
 
+- [ ] Sub packages (packages within packages)
+
 ## Todo - Internal
 - [ ] Reduce duplication
 
 ## Limitations
 
-- Packages with special characters in the name will not be supported
-
 Can handle most datatypes and objects, although I dont recommend storing your assets and code in the same package, as it makes the file structure messy
 
 Requires a specific structure for packages;
 - The package's "main" instance must be a Folder or Folder-like (the instance with the PackageLink inside)
+
+- Cannot handle packages within packages currently;
+- Cannot handle properties that reference instances (i.e. PrimaryPart or Handle)
 
 ## Known issues
 
