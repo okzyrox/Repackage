@@ -88,7 +88,24 @@ function Util.safeDirName(
 	name: string
 ): string
 	local safeName = name:gsub("[<>:\"/\\|%?%*]", "_")
+	if safeName ~= name then 
+		Util.warn(`{name} was converted to {safeName} due to invalid characters`)
+	end
 	return safeName
+end
+
+function Util.getInstancePath(
+	instance: Instance
+): string
+	local parts: {string} = {}
+	local currentInstance: Instance? = instance
+
+	while currentInstance ~= nil do
+		table.insert(parts, 1, currentInstance.Name)
+		currentInstance = currentInstance.Parent
+	end
+
+	return table.concat(parts, "/")
 end
 
 function Util.getScriptTypeFromName(
@@ -189,6 +206,7 @@ function Util.joinPathParts(
 
 	for i, part in parts do
 		if type(part) == "string" and part ~= "" then
+			part = part:match("^%s*(.-)%s*$") or part
 			if i > 1 then
 				part = part:gsub("^/+", "")
 			end

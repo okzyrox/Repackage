@@ -259,7 +259,7 @@ function Tree.constructInstanceTreeFromInstance(
 				type = "file",
 				name = instance.Name .. ".meta.json",
 				content = serde.encode("json", {
-					-- Name = instance.Name,
+					["name"] = instance.Name, --/ in the event it has to be renamed due to invalid chars:
 					["className"] = instance.ClassName,
 					["properties"] = Tree.getInstanceProperties(instance)
 				})
@@ -280,6 +280,7 @@ function Tree.constructInstanceTreeFromInstance(
 					type = "file",
 					name = "init.meta.json",
 					content = serde.encode("json", {
+						["name"] = instance.Name,
 						["properties"] = Tree.getInstanceProperties(instance)
 					})
 				})
@@ -298,10 +299,9 @@ function Tree.constructInstanceTreeFromInstance(
 				type = "file",
 				name = "init.meta.json",
 				content = serde.encode("json", {
-					-- Name = instance.Name,
+					["name"] = instance.Name,
 					["className"] = instance.ClassName,
 					["properties"] = props
-					
 				})
 			})
 		end
@@ -330,6 +330,7 @@ function Tree.constructInstanceTreeFromInstance(
 					type = "file",
 					name = "init.meta.json",
 					content = serde.encode("json", {
+						["name"] = instance.Name,
 						["properties"] = Tree.getInstanceProperties(instance)
 					})
 				})
@@ -398,7 +399,6 @@ function Tree.constructInstanceTreeFromDirectory(
 		dirPath = dirPath:sub(1, -2)
 	end
 
-
 	local nameParts = dirPath:split("/")
 	local lastPart = nameParts[#nameParts]
 
@@ -445,6 +445,8 @@ function Tree.constructInstanceFromTreeNode(
 
 				if initMetaNode then
 					local metaJson = serde.decode("json", initMetaNode.content or "{}")
+					local name = metaJson["name"] or node.name
+					scriptInstance.Name = name
 					local properties = metaJson["properties"] or {}
 					Tree.addInstanceProperties(scriptInstance, properties)
 				end
@@ -457,8 +459,9 @@ function Tree.constructInstanceFromTreeNode(
 			if initMetaNode then
 				local metaJson = serde.decode("json", initMetaNode.content or "{}")
 				local className = metaJson["className"] or "Folder"
+				local name = metaJson["name"] or node.name
 				local instance = roblox.Instance.new(className)
-				instance.Name = node.name
+				instance.Name = name
 				
 				local properties = metaJson["properties"] or {}
 				Tree.addInstanceProperties(instance, properties)
@@ -485,8 +488,9 @@ function Tree.constructInstanceFromTreeNode(
 		if node.name:find(".meta.json") then
 			local metaJson = serde.decode("json", node.content or "{}")
 			local className = metaJson["className"] or "Folder"
+			local name = metaJson["name"] or node.name:gsub("%.meta%.json$", "") -- filter for meta
 			local instance = roblox.Instance.new(className)
-			instance.Name = node.name:gsub("%.meta%.json$", "") -- filter for meta
+			instance.Name = name 
 			
 			local properties = metaJson["properties"] or {}
 			Tree.addInstanceProperties(instance, properties)

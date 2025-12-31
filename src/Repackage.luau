@@ -9,6 +9,7 @@ local process = require("@lune/process")
 local serde = require("@lune/serde")
 local stdio = require("@lune/stdio")
 local task = require("@lune/task")
+local roblox = require("@lune/roblox")
 
 local Tree = require("./Tree")
 local Util = require("./Util")
@@ -258,6 +259,35 @@ local function getPackageDiff(
 	end
 end
 
+local function savePackage(
+	packageName: string,
+	outputFile: string
+)
+	local packagePath = RobloxAPI.getLocalPackagePath(packageName)
+	if not packagePath then
+		Util.warn("Package not found with name:", packageName)
+		return
+	end
+
+	if fs.isFile(outputFile) then
+		Util.warn("An output file with that name already exists!")
+		return
+	end
+
+	local cleanOutputFile = Util.safeDirName(outputFile)
+	if fs.isFile(cleanOutputFile) then
+		Util.warn("An output file with that name already exists!")
+		return
+	end
+
+	local tree = Tree.constructInstanceTreeFromDirectory(packagePath)
+	local package = Tree.constructPackageFromTree(tree)
+	local rbxmData = roblox.serializeModel(package, false)
+
+	fs.writeFile(cleanOutputFile, rbxmData)
+	print("Package saved to file:", cleanOutputFile)
+end
+
 local function publishPackage(
 	packageName: string
 )
@@ -412,6 +442,11 @@ local Commands: {[string]: Command} = {
 		args = {"Package Name"},
 		desc = "Get differences between local package and the current uploaded package asset",
 		func = getPackageDiff
+	},
+	save = {
+		args = {"Package Name", "Output File"},
+		desc = "Save a local package to a .rbxm file",
+		func = savePackage
 	},
 	help = {
 		args = {},

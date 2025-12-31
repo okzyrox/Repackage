@@ -11,5 +11,11 @@ tests/**
 bundle/Bundled.luau
 *.exe
 
+# Roblox
+*.rbxm
+*.rbxmx
+*.rbxl
+*.rbxlx
+
 # Repackage
 repackage.config.json

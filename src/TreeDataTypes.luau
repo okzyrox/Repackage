@@ -188,15 +188,18 @@ TreeDataTypes["Font"] = {
     Ser = function(value: any): any
         local font = value :: Font
         return {
-            family = font.Family,
-            weight = font.Weight.Name,
-            style = font.Style.Name,
+            Font = {
+                family = font.Family,
+                weight = font.Weight.Name,
+                style = font.Style.Name,
+            }
         }
     end,
     Des = function(data: any): Font
-        local family = data["family"] :: string
-        local weightName = data["weight"] :: string
-        local styleName = data["style"] :: string
+        local fontData = data["Font"] :: any
+        local family = fontData["family"] :: string
+        local weightName = fontData["weight"] :: string
+        local styleName = fontData["style"] :: string
 
         local weight = roblox.Enum.FontWeight[weightName] :: Enum.FontWeight
         local style = roblox.Enum.FontStyle[styleName] :: Enum.FontStyle
@@ -214,14 +217,18 @@ TreeDataTypes["Instance"] = {
         local instance = value :: Instance
         Util.warn("Instance reference serialisation is not supported.")
         return {
-            className = instance.ClassName,
-            name = instance.Name,
+            InstanceReference = {
+                className = instance.ClassName,
+                name = instance.Name,
+                path = Util.getInstancePath(instance),
+            }
         }
     end,
     Des = function(data: any): Instance
-        local className = data["className"] :: string
+        local instanceData = data["InstanceReference"] :: any
+        local className = instanceData["className"] :: string
         local instance = roblox.Instance.new(className)
-        instance.Name = data["name"] :: string
+        instance.Name = instanceData["name"] :: string
         return instance
     end,
 }

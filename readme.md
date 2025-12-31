@@ -63,8 +63,9 @@ Can handle most datatypes and objects, although I dont recommend storing your as
 Requires a specific structure for packages;
 - The package's "main" instance must be a Folder or Folder-like (the instance with the PackageLink inside)
 
-- Cannot handle packages within packages currently;
+- Cannot handle packages within packages currently
 - Cannot handle properties that reference instances (i.e. PrimaryPart or Handle)
+  - will still be written to meta files; however when publishing they will not be included.
 
 ## Known issues
 
