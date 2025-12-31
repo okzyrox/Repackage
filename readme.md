@@ -5,7 +5,7 @@ Experimental
 Aims to be a utility tool for quickly publishing changes to packages on Roblox relevant to a given directory of files and associated package file
 
 
-## Repackage Config
+## Repackage Config Spec
 ```jsonc
 {
   "debugLogs": false, // true / false 
@@ -33,6 +33,62 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
   }
 }
 
+```
+
+## Working with Repackage & Rojo
+
+> [!WARNING]
+> Using Rojo sync will (more often than not), incorrectly sync over meta properties for instances. Due to it's inconsistencies there may be bugs when using Rojo w/ Repackage.
+
+Repackage isn't technically designed to work 100% with Rojo, however you can still use it if you wish. 
+
+Here are my recommendations:
+
+### 1. Repackage Config
+```jsonc
+{
+  // ...
+  "outputDirectory": "Packages/" // locally store all your packages in this single place
+  // ...
+}
+```
+
+### 2. Rojo Config
+So that when you work with rojo, you can do something like this when handling packages in Rojo where:
+- Each package is given it's own file in the workspace correlating to where it should be
+- The sourcemap can generate accurate mappings to your packages
+- You can add other files seperately in your "src/" directory or wherever else you may have it
+```jsonc
+{
+  // ...
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "Shared": {
+        "$className": "Folder",
+        "Modules": {
+          "$path": "Packages/SharedModules.Package/SharedModules" // directly reference the package folder correlating to where it's used
+        },
+        "$path": "src/shared" // include other shared files
+      },
+    },
+
+    "ServerScriptService": {
+      "Server": {
+        "$className": "Folder",
+        "Services": {
+          "$path": "Packages/ServerServices.Package/ServerServices"
+        },
+        "Modules": {
+          "$path": "Packages/ServerModules.Package/ServerModules"
+        },
+        "$path": "src/server" // include other server files
+      }
+    }
+    // ...
+  }
+}
 ```
 
 ## Todo
