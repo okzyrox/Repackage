@@ -10,11 +10,13 @@ on:
       - 'rokit.toml'
       - 'selene.toml'
 
-
-
 jobs:
-  build-windows:
-    runs-on: windows-2022
+  build:
+    strategy:
+      matrix:
+        os: [windows-2022, ubuntu-22.04]
+        arch: [x86_64, aarch64]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - uses: CompeyDev/setup-rokit@v0.1.2
@@ -26,11 +28,16 @@ jobs:
       - name: Bundle Files
         run: darklua process src/Repackage.luau bundle/Bundled.luau -c bundle/darklua.config
 
-      - name: Build Executable
-        run: lune build bundle/Bundled.luau -o bundle/Repackage.exe 
+      - name: Build (Windows)
+        if: matrix.os == 'windows-2022'
+        run: lune build bundle/Bundled.luau -o bundle/Repackage-${{ matrix.arch }}.exe -t windows-${{ matrix.arch }}
+      
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: lune build bundle/Bundled.luau -o bundle/Repackage-${{ matrix.arch }} -t linux-${{ matrix.arch }}
           
       - name: Upload Bundle Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Repackage
-          path: bundle/Repackage.exe
+          name: Repackage-${{ matrix.os }}-${{ matrix.arch }}
+          path: bundle/Repackage*
