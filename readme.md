@@ -125,6 +125,5 @@ Requires a specific structure for packages;
 
 ## Known issues
 
-- Commands are limited
 - Internal returned values are all over the place (my bad..)
 - No user-facing access to downloading specific versions of packages

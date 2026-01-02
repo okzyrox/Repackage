@@ -19,8 +19,18 @@ local RobloxAPI = require("./RobloxAPI")
 local colored = require("./Lib/colored")
 
 --// Types
+
+type Argument = {
+	name: string,
+	type: "string" | "number" | "boolean" | "options",
+	optional: boolean?,
+
+	options: {string}?
+}
+
 type Command = {
-	args: {string},
+	args: {Argument},
+	aliases: {string}?,
 	desc: string?,
 	func: (...any) -> ()?
 }
@@ -406,6 +416,32 @@ local function showHelp(
 	end
 end
 
+local function showHelpCommand(
+	commandName: string,
+	commandData: Command
+)
+	print(colored("Command: " .. commandName, "light_cyan", nil, {"bold"}))
+	if commandData.desc then
+		print(colored("Description: " .. commandData.desc, "light_yellow"))
+	end
+	if commandData.aliases and #commandData.aliases > 0 then
+		print(colored("Aliases: " .. table.concat(commandData.aliases, ", "), "light_green"))
+	end
+	if #commandData.args > 0 then
+		print(colored("Arguments:", "light_magenta"))
+		for _, argData in commandData.args do
+			local argLine = " - " .. argData.name .. " (" .. argData.type .. ")"
+			if argData.optional == true then
+				argLine ..= " [Optional]"
+			end
+			if argData.type == "options" and argData.options then
+				argLine ..= " Options: {" .. table.concat(argData.options, ", ") .. "}"
+			end
+			print(colored(argLine, "grey"))
+		end
+	end
+end
+
 --// Main
 local Commands: {[string]: Command} = {
 	setup = {
@@ -414,50 +450,106 @@ local Commands: {[string]: Command} = {
 		func = setup
 	},
 	create = {
-		args = {"Package Asset ID"},
+		args = {
+			{
+				name = "Package Asset ID",
+				type = "number"
+			}
+		},
 		desc = "Create a package onto the filesystem from a package asset",
 		func = createPackage
 	},
 	update = {
-		args = {"Package Name"},
+		args = {
+			{
+				name = "Package Name",
+				type = "string"
+			}
+		},
 		desc = "Update a local package to the latest version available on Roblox",
 		func = updateLocalPackage
 	},
 	publish = {
-		args = {"Package Name"},
+		args = {
+			{
+				name = "Package Name",
+				type = "string"
+			}
+		},
 		desc = "Publish local package changes to the package asset",
 		func = publishPackage
 	},
 	info = {
-		args = {"Package Name"},
+		args = {
+			{
+				name = "Package Name",
+				type = "string"
+			}
+		},
 		desc = "Get information about a local package",
 		func = getPackageInfo
 	},
 	revisions = {
-		args = {"Package Asset ID"},
+		args = {
+			{
+				name = "Package Asset ID",
+				type = "number"
+			}
+		},
 		desc = "List revisions for a package asset",
 		func = getPackageRevisions
 	},
 	diff = {
-		args = {"Package Name"},
+		args = {
+			{
+				name = "Package Name",
+				type = "string"
+			}
+		},
 		desc = "Get differences between local package and the current uploaded package asset",
 		func = getPackageDiff
 	},
 	save = {
-		args = {"Package Name", "Output File"},
+		args = {
+			{
+				name = "Package Name",
+				type = "string"
+			}, 
+			{
+				name = "Output File (.rbxm)",
+				type = "string"
+			}
+		},
 		desc = "Save a local package to a .rbxm file",
 		func = savePackage
-	},
-	help = {
-		args = {},
-		desc = "Show this help message",
 	}
 }
 
-local HelpAliases = {
-	"-h",
-	"--help",
-	"help"
+Commands.help = {
+	args = {
+		{
+			name = "Command Name",
+			type = "string",
+			optional = true
+		}
+	},
+	aliases = {
+		"-h",
+		"--help",
+	},
+	desc = "Show this help message",
+	func = function(commandName: string?)
+		if commandName then
+			local commandData = Commands[commandName]
+			if commandData then
+				showHelpCommand(commandName, commandData)
+			else
+				print(colored("Unknown command: " .. commandName, "yellow"))
+			end
+		else
+			showHelp(Commands)
+		end
+	end
 }
 
 local function main()
@@ -470,23 +562,73 @@ local function main()
 	elseif process.args[1] == nil then
 		print(colored("No command provided!", "yellow"))
 		return
-	elseif table.find(HelpAliases, process.args[1]) then
-		showHelp(Commands)
-	elseif not Commands[process.args[1]] then
-		print(colored("Unknown command: " .. process.args[1], "yellow"))
+	end
+	local commandName = process.args[1]
+	local aliasCommandName: string? = nil
+	for cmdName, cmdData in Commands do
+		if cmdData.aliases then
+			if table.find(cmdData.aliases, commandName) then
+				aliasCommandName = cmdName
+				break
+			end
+		end
+	end
+	if aliasCommandName then
+		commandName = aliasCommandName
+	end
+
+	if not Commands[commandName] then
+		print(colored("Unknown command: " .. commandName, "yellow"))
 		return
 	else
-		local commandName = process.args[1]
 		local commandData = Commands[commandName]
 		local commandArgs = {}
 		for i = 1, #commandData.args do
 			local argValue = process.args[i + 1]
-			if not argValue then
+			local commandArgData = commandData.args[i]
+			if not argValue and commandArgData.optional ~= true then
 				--/ amazing formatting
-				local argMsg = `{colored("Missing argument: ", "yellow")}{colored(commandData.args[i], "light_green")}{colored(" for ", "yellow")}{colored(commandName, "light_magenta")}`
+				local argMsg = `{colored("Missing argument: ", "yellow")}{colored(commandArgData.name, "light_green")}{colored(" for ", "yellow")}{colored(commandName, "light_magenta")}`
+				if commandArgData.options then
+					argMsg ..= `{colored(" (Options: ", "yellow")}{colored("{" .. table.concat(commandArgData.options, ", ") .. "}", "light_green")}{colored("}", "yellow")}`
+				end
 				print(argMsg)
 				return
 			end
+			
+			if commandArgData.type == "number" then
+				local success, number = pcall(function()
+					return tonumber(argValue)
+				end)
+				if not success or number == nil then
+					print(colored("Invalid number for argument: " .. commandArgData.name, "yellow"))
+					return
+				end
+				argValue = number
+			elseif commandArgData.type == "boolean" then
+				local lowered = tostring(argValue):lower()
+				if lowered == "true" then
+					argValue = true
+				elseif lowered == "false" then
+					argValue = false
+				else
+					print(colored("Invalid boolean for argument: " .. commandArgData.name, "yellow"))
+					print(colored("Expected true or false", "yellow"))
+					return
+				end
+			elseif commandArgData.type == "options" then
+				if not commandArgData.options then
+					return
+				end
+
+				if not table.find(commandArgData.options, argValue) then
+					local options = table.concat(commandArgData.options, ", ")
+					print(colored("Invalid option for argument: " .. commandArgData.name, "yellow"))
+					print(colored("Expected one of: " .. options, "light_green"))
+					return
+				end
+			end
+
 			table.insert(commandArgs, argValue)
 		end
 		if commandData.func then
