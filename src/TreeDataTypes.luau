@@ -217,19 +217,17 @@ TreeDataTypes["Instance"] = {
         local instance = value :: Instance
         Util.warn("Instance reference serialisation is not supported.")
         return {
-            InstanceReference = {
+            Instance = {
                 className = instance.ClassName,
                 name = instance.Name,
                 path = Util.getInstancePath(instance),
             }
         }
     end,
-    Des = function(data: any): Instance
-        local instanceData = data["InstanceReference"] :: any
-        local className = instanceData["className"] :: string
-        local instance = roblox.Instance.new(className)
-        instance.Name = instanceData["name"] :: string
-        return instance
+    Des = function(data: any): string
+        local instanceData = data["Instance"] :: any
+        local resolvePath = instanceData["path"] :: string
+        return resolvePath
     end,
 }
 

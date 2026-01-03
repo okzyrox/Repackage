@@ -59,7 +59,7 @@ local function createPackage(
 )
 	local packageName, tree = RobloxAPI.getPackageTree(assetId)
 	if not tree or not packageName then
-		print("Failed to retrieve package tree.")
+		Util.error("Failed to retrieve package tree.")
 		return
 	end
 	local outDir = Config.get("outputDirectory")
@@ -83,7 +83,7 @@ local function createPackage(
 	Tree.writeInstanceTreeToFS(tree, outDir, true)
 	fs.writeFile(packageMetaFile, serde.encode("json", tree, true))
 
-	print("Package created at:", packageOutDir)
+	Util.info("Package created at:", packageOutDir)
 end
 
 local function updateLocalPackage(
@@ -132,7 +132,7 @@ local function updateLocalPackage(
 	local packageRevisionId: string? = packageData["packageRevisionId"]
 	local packageNameNew, treeNew = RobloxAPI.getPackageTree(assetId)
 	if not treeNew or not packageNameNew then
-		Util.warn("Failed to retrieve updated package tree.")
+		Util.error("Failed to retrieve updated package tree.")
 		return
 	end
 
@@ -303,9 +303,9 @@ local function publishPackage(
 )
 	local publishStatus, operationId = RobloxAPI.publishToPackage(packageName)
 	if publishStatus == "SUCCESS" then
-		print(colored("Package published successfully: " .. packageName, "green"))
+		Util.info("Package published successfully:", packageName)
 	elseif publishStatus == "FAILED" then
-		print(colored("Failed to publish package: " .. packageName, "red"))
+		Util.error("Failed to publish package:", packageName)
 	elseif publishStatus == "PENDING" then
 		print(colored("Package publish is pending. Operation ID: " .. tostring(operationId), "yellow"))
 
@@ -324,7 +324,7 @@ local function publishPackage(
 			elseif result == false then
 				print("Pending...")
 			elseif result == nil then
-				print(colored("Failed to publish package: " .. packageName), "red")
+				Util.error("Failed to publish package: " .. packageName)
 				break
 			end
 
@@ -398,8 +398,8 @@ end
 local function showHelp(
 	commands: {[string]: Command}
 )
-	print(colored("Repackage - Package Manager", "light_cyan", nil, {"bold"}))
-	print(colored("Usage: Repackage.luau <command> [args...]", "light_magenta", nil, {"bold"}))
+	print(colored("Repackage - A Package Manager", "light_cyan", nil, {"bold"}))
+	print(colored("Usage: Repackage <command> [args...]", "light_magenta", nil, {"bold"}))
 	print(colored("Commands:", "light_cyan", nil, {"bold"}))
 	for commandName, commandData in commands do
 		stdio.write("  " .. colored(commandName, "light_green", nil, {"underline"}))
@@ -560,7 +560,7 @@ local function main()
 		showHelp(Commands)
 		return
 	elseif process.args[1] == nil then
-		print(colored("No command provided!", "yellow"))
+		Util.warn("No command provided!")
 		return
 	end
 	local commandName = process.args[1]
@@ -578,7 +578,7 @@ local function main()
 	end
 
 	if not Commands[commandName] then
-		print(colored("Unknown command: " .. commandName, "yellow"))
+		Util.warn("Unknown command:", commandName)
 		return
 	else
 		local commandData = Commands[commandName]
@@ -601,7 +601,7 @@ local function main()
 					return tonumber(argValue)
 				end)
 				if not success or number == nil then
-					print(colored("Invalid number for argument: " .. commandArgData.name, "yellow"))
+					Util.warn("Invalid number for argument:", commandArgData.name)
 					return
 				end
 				argValue = number
@@ -612,7 +612,7 @@ local function main()
 				elseif lowered == "false" then
 					argValue = false
 				else
-					print(colored("Invalid boolean for argument: " .. commandArgData.name, "yellow"))
+					Util.warn("Invalid boolean for argument:", commandArgData.name)
 					print(colored("Expected true or false", "yellow"))
 					return
 				end
@@ -623,7 +623,7 @@ local function main()
 
 				if not table.find(commandArgData.options, argValue) then
 					local options = table.concat(commandArgData.options, ", ")
-					print(colored("Invalid option for argument: " .. commandArgData.name, "yellow"))
+					Util.warn("Invalid option for argument:", commandArgData.name)
 					print(colored("Expected one of: " .. options, "light_green"))
 					return
 				end

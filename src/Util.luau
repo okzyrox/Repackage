@@ -10,6 +10,7 @@ local colored = require("./Lib/colored")
 local PrintExtraProperties = {
 	["Animation"] = {"AnimationId"},
 	["Sound"] = {"AudioContent"},
+	["ObjectValue"] = {"Value"},
 }
 
 --// Module
@@ -23,7 +24,25 @@ function Util.dprint(
 	if not Util.DebugMode then
 		return
 	end
-	print(...)
+	local str = { ... }
+	local strFmt = "[DEBUG] - " .. table.concat(str, " ")
+	print(colored(strFmt, "cyan"))
+end
+
+function Util.info(
+	...: any
+)
+	local str = { ... }
+	local strFmt = "[INFO] - " .. table.concat(str, " ")
+	print(colored(strFmt, "green"))
+end
+
+function Util.error(
+	...: any
+)
+	local str = { ... }
+	local strFmt = "[ERROR] - " .. table.concat(str, " ")
+	print(colored(strFmt, "red"))
 end
 
 function Util.warn(
@@ -106,6 +125,18 @@ function Util.getInstancePath(
 	end
 
 	return table.concat(parts, "/")
+end
+
+function Util.getInstanceFromPath(
+	root: Instance,
+	path: string
+): Instance?
+	local tree = {}
+	for _, instance in root:GetDescendants() do
+		local instancePath = Util.getInstancePath(instance)
+		tree[instancePath] = instance
+	end
+	return tree[path] or nil
 end
 
 function Util.getScriptTypeFromName(

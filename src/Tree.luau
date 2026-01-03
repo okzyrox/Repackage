@@ -54,12 +54,23 @@ local SCRIPT_EXTENSIONS = {
 
 local PACKAGE_META_FILE = "repackage.json"
 local PACKAGE_ROOT_APPEND = ".Package"
+local REF_PROPERTY_EXT = {
+	Prefix = "Repackage_",
+	Suffix = "_RefPath"
+}
 
 --// Module
 
 local Tree = {}
 Tree.PACKAGE_META_FILE_PATH = PACKAGE_META_FILE
 Tree.PACKAGE_ROOT_APPEND = PACKAGE_ROOT_APPEND
+Tree.REF_PROPERTY_EXT = REF_PROPERTY_EXT
+
+function Tree.getRefPathAttrName(
+	propName: string
+): string
+	return REF_PROPERTY_EXT.Prefix .. propName .. REF_PROPERTY_EXT.Suffix
+end
 
 function Tree.getDataTypePropertyValue(
 	value: any
@@ -119,6 +130,8 @@ function Tree.getInstanceProperties(
 	instance: Instance
 ): {[string]: any}
 	local properties: {[string]: any} = {}
+	local tags: {string} = {}
+	local attributes: {[string]: any} = {}
 	local classInfo = DB:GetClass(instance.ClassName)
 	if classInfo then
 		for _, propInfo in classInfo.Properties do
@@ -137,7 +150,15 @@ function Tree.getInstanceProperties(
 					if dataType == "EnumItem" then
 						properties[propInfo.Name] = value.Name
 					else
-						properties[propInfo.Name] = Tree.getDataTypePropertyValue(value)
+						if propInfo.Datatype == "Ref" then
+							local refPath = Util.getInstancePath(value)
+							local refPathAttrName = Tree.getRefPathAttrName(propInfo.Name)
+							attributes[refPathAttrName] = {
+								String = refPath
+							}
+						else
+							properties[propInfo.Name] = Tree.getDataTypePropertyValue(value)
+						end
 					end
 				else
 					properties[propInfo.Name] = value
@@ -146,8 +167,6 @@ function Tree.getInstanceProperties(
 		end
 	end
 
-	local tags: {string} = {}
-	local attributes: {[string]: any} = {}
 	for attrName, attrValue in instance:GetAttributes() do
 		attributes[attrName] = Tree.getAttributePropertyValue(attrValue)
 	end
@@ -171,7 +190,12 @@ function Tree.addInstanceProperties(
 	instance: Instance,
 	properties: {[string]: any}
 )
+	local class = DB:GetClass(instance.ClassName)
+	if not class then
+		error("Invalid or unsupported class for instance: " .. instance.ClassName)
+	end
 	for propName, propValue in properties do
+		local propertyInfo = class.Properties[propName]
 		if propName == "Attributes" then
 			for attrName, attrValue in propValue do
 				if not TreeDataTypes.validateAttributeName(attrName) then
@@ -191,11 +215,48 @@ function Tree.addInstanceProperties(
 
 		pcall(function()
 			if type(propValue) == "table" then
-				instance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
+				if propertyInfo.Datatype == "Ref" then
+					-- workaround: store as an attribute with a path then resolve later
+					local refResolvingPath: string = Tree.getDataTypeFromPropertyValue(propValue)
+					local refPathAttrName = Tree.getRefPathAttrName(propName)
+					instance:SetAttribute(refPathAttrName, refResolvingPath)
+				else
+					instance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
+				end
 			else
 				instance[propName] = propValue
 			end
 		end)
+	end
+end
+
+function Tree.resolvePropertyRefs(
+	instance: Instance,
+	root: Instance
+)
+	local class = DB:GetClass(instance.ClassName)
+	if not class then
+		error("Invalid or unsupported class for instance: " .. instance.ClassName)
+	end
+
+	for propName, propertyInfo in class.Properties do
+		if propertyInfo.Datatype == "Ref" then
+			local attrs = instance:GetAttributes()
+			local refPathAttrName = Tree.getRefPathAttrName(propName)
+			local refPath = attrs[refPathAttrName]
+			if refPath then
+				local refInstance = Util.getInstanceFromPath(root, refPath)
+				if refInstance then
+					Util.info("Resolved reference for property:", propName, "to instance at path:", refPath)
+					instance[propName] = refInstance
+				else
+					Util.warn("Could not resolve reference for property:", propName, "at path:", refPath)
+				end
+				instance:SetAttribute(refPathAttrName, nil) -- clean up
+			else
+				Util.warn("No reference attribute found for property:", propName)
+			end
+		end
 	end
 end
 
@@ -312,6 +373,7 @@ function Tree.constructInstanceTreeFromInstance(
 			end)
 			if not nodeSuccess then
 				print("Could not construct instance tree for child:", child.Name, child.ClassName)
+				print(node)
 				continue
 			end
 			table.insert(dirChildren, node)
@@ -475,7 +537,7 @@ function Tree.constructInstanceFromTreeNode(
 			else
 				local folder = roblox.Instance.new("Folder")
 				folder.Name = node.name
-				
+
 				for _, childNode in childrenRef do
 					local childInstance = Tree.constructInstanceFromTreeNode(childNode)
 					childInstance.Parent = folder
@@ -522,6 +584,16 @@ function Tree.constructInstanceFromTreeNode(
 	end
 end
 
+function Tree.resolveRootPropertyRefs(root: Instance)
+    local function resolveRec(instance: Instance)
+        Tree.resolvePropertyRefs(instance, root)
+        for _, child in instance:GetChildren() do
+            resolveRec(child)
+        end
+    end
+    resolveRec(root)
+end
+
 function Tree.writeInstanceTreeToFS(
 	tree: TreeNode, 
 	basePath: string, 
@@ -530,7 +602,7 @@ function Tree.writeInstanceTreeToFS(
 	if clearOld then
 		local dirPath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
 		if fs.isDir(dirPath) then
-			print("Clearing old version")
+			Util.info("Clearing old version")
 			for _, item in fs.readDir(dirPath) do
 				local itemPath = Util.joinPathParts(dirPath, item)
 				if fs.isDir(itemPath) then
@@ -581,6 +653,13 @@ function Tree.constructPackageFromTree(
 		local instance = Tree.constructInstanceFromTreeNode(tree)
 		table.insert(instances, instance)
 	end
+
+	local root = instances[1]
+	if not root then
+		Util.error("No instances were able to be constructed from tree")
+		error("No instances were able to be constructed from tree")
+	end
+	Tree.resolveRootPropertyRefs(root)
 
 	return instances
 end
