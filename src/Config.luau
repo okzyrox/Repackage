@@ -14,6 +14,7 @@ local Util = require("./Util")
 export type ConfigOption = 
 	"outputDirectory" |
 	"publishAwaitOperation" |
+	"serialiseNonScripts" |
 	"secrets" |
 	"debugLogs"
 
@@ -35,6 +36,7 @@ local PACKAGE_CONFIG_FILE = "repackage.config.json"
 local DEFAULT_CONFIG: Config = {
 	outputDirectory = "output/",
 	publishAwaitOperation = true,
+	serialiseNonScripts = false,
 
 	secrets = {
 		secretsType = "file", -- file | env
@@ -57,7 +59,7 @@ function Config.loadConfig(createConfig: boolean?): Config
 	local exists = fs.isFile(PACKAGE_CONFIG_FILE)
 	if not exists then
 		if createConfig == true then
-			Util.dprint("No config file found, creating...")
+			Util.info("No config file found, creating...")
 			local defaultConfigJson = serde.encode("json", DEFAULT_CONFIG, true)
 			fs.writeFile(PACKAGE_CONFIG_FILE, defaultConfigJson)
 		end
@@ -71,7 +73,7 @@ function Config.loadConfig(createConfig: boolean?): Config
 	end)
 
 	if not success then
-		Util.dprint("Failed to read config, using default.")
+		Util.warn("Failed to read config, using default.")
 		return DEFAULT_CONFIG
 	end
 
@@ -89,7 +91,7 @@ function Config.loadConfig(createConfig: boolean?): Config
 	end
 
 	if configNeededUpdate == true then
-		print("Updating config...")
+		Util.info("Updating config...")
 		fs.writeFile(PACKAGE_CONFIG_FILE, serde.encode("json", UserConfig, true))
 	end
 

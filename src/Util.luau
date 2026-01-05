@@ -6,6 +6,12 @@
 --// Modules
 local colored = require("./Lib/colored")
 
+--// Types
+export type JsonObject = { [string | number]: JsonNode | string | number | boolean | nil  }
+export type JsonNode = {
+	[string | number]: JsonObject
+}
+
 --// Vars
 local PrintExtraProperties = {
 	["Animation"] = {"AnimationId"},

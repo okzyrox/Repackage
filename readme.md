@@ -9,31 +9,47 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
 ```jsonc
 {
   "debugLogs": false, // true / false 
-  // -- debug prints will be displayed
 
   "outputDirectory": "output/", // a folder 
-  // -- where local packages should be downloaded to
 
   "publishedAwaitOperation": true, // true / false
-  // if true, then the Repackage will stall until the package has been confirmed to be published
+
+  "serialiseNonScripts": false, // true / false
 
   "secrets": {
     "secretsEnvKey": "ROBLOX_API_KEY", // a environment variable 
-    // -- the name of the environment variable with the API KEY
 
     "secretsFile": "api_key.txt", // a filename 
-    // -- the file name of the file that has the API KEY
 
     "secretsDirectory": "secrets/", // a folder 
-    // -- the folder name of the folder that has the file for the API KEY
 
     "secretsType": "file" // either "file" or "env" 
-    // -- decides if to use the folder for getting the API KEY or the environment variable 
 
   }
 }
-
 ```
+
+#### `debugLogs` - `bool`
+Whether or not debug logs in the terminal will be printed
+#### `outputDirectory` - `string`
+The path to the folder where packages will be created/serialised into
+#### `publishedAwaitOperation` - `bool`
+If Repackage should stall the program whilst a package is publishing to ensure the operation was successful
+#### `serialiseNonScripts` - `bool`
+Whether non-script instances, such as Models or Parts, should be serialised as Repackage Meta files.<br>
+- If `true`: then they will be serialised as `Repackage` `.meta.json`.
+- If `false`: then they will be serialised as `Roblox` `.rbxmx`.
+#### `secrets` - `struct`
+- ##### `secretsEnvKey` - `string?`
+  - The environment variable name for the Roblox API key
+- ##### `secretsFile` - `string?`
+  - The file path for the file containing just the Roblox API key
+- ##### `secretsDirectory` - `string?`
+  - The directory path used in tandem with `secretsFile` for the Roblox API key
+- #### `secretsType` - `file | env`
+  - Decides which method to use for finding and using the API Key
+    - If `file`, then will use `secretsDirectory` and `secretsFile` to find it
+    - If `env`, then will use `secretsEnvKey` to find it
 
 ## Working with Repackage & Rojo
 
@@ -99,8 +115,10 @@ So that when you work with rojo, you can do something like this when handling pa
 - [x] Generate a matching map for a given directory
 - [x] Compare mappings for changes
 - [x] Publishing to package
-    - [ ] All / Specified
+    - [x] All
+    - [ ] Specified
     - [ ] Package revision notes
+      - i dont think this can be set via the API, might also be client only but i have no idea
     - [x] Update local package meta on update
     - [ ] Check if newer version exists; stash changes in some way
         - [ ] Repackage temp folder config
@@ -110,16 +128,21 @@ So that when you work with rojo, you can do something like this when handling pa
 - [ ] Sub packages (packages within packages)
 
 ## Todo - Internal
-- [ ] Reduce duplication
+- [ ] Add warning when publishing about unresolved Refs if any
+- [ ] Add warning when creating/publishing about sub-packages (unsupported)
 
 ## Limitations
 
-Can handle most datatypes and objects, although I dont recommend storing your assets and code in the same package, as it makes the file structure messy
+Can handle most datatypes and objects, although I dont recommend storing your assets and code in the same package, as it makes the file structure messy. I personally mainly use seperate Packages for Code and actual Instances.
 
 Requires a specific structure for packages;
 - The package's "main" instance must be a Folder or Folder-like (the instance with the PackageLink inside)
 
 - Cannot handle packages within packages currently
+
+- Cannot handle instance Refs that are outside of the package; will throw a warning if it fails to find one
+  - as such, packages that contain references to things outside of the package should not be used.
+  - furthermore, the `info` command will kindly print out every time it fails to find a reference
 
 ## Known issues
 

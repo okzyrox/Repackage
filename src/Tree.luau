@@ -10,11 +10,13 @@ local serde = require("@lune/serde")
 
 local TreeDataTypes = require("./TreeDataTypes")
 local Util = require("./Util")
+local Config = require("./Config")
+
 local DMPLib = require("./Lib/diff_match_patch")
 
 --// Types
 export type ScriptNode = LocalScript | Script | ModuleScript
-export type TreeNodeType = "file" | "directory"
+export type TreeNodeType = "file" | "directory" | "binaryfile"
 export type TreeNode = {
 	type: TreeNodeType,
 	name: string,
@@ -74,10 +76,11 @@ end
 
 function Tree.getDataTypePropertyValue(
 	value: any
-): any | string
+): TreeDataTypes.Deserialisable
 	local dataType = typeof(value)
 	if TreeDataTypes[dataType] then
-		return TreeDataTypes[dataType].Ser(value)
+		local serialiser = TreeDataTypes[dataType].Ser
+		return serialiser(value)
 	else
 		Util.warn("No serialiser for data type:", dataType)
 		return tostring(value)
@@ -86,7 +89,7 @@ end
 
 function Tree.getDataTypeFromPropertyValue(
 	value: any
-): string
+): TreeDataTypes.Serialisable
 	local dataType = ""
 	for typeName, _ in value do
 		dataType = typeName
@@ -94,7 +97,8 @@ function Tree.getDataTypeFromPropertyValue(
 	end
 
 	if TreeDataTypes[dataType] then
-		return TreeDataTypes[dataType].Des(value)
+		local deserialiser = TreeDataTypes[dataType].Des
+		return deserialiser(value)
 	else
 		Util.warn("No deserialiser for data type:", dataType)
 		return tostring(value)
@@ -201,7 +205,7 @@ function Tree.addInstanceProperties(
 				if not TreeDataTypes.validateAttributeName(attrName) then
 					error("Invalid attribute name: " .. attrName)
 				end
-				for attrType, attrTrueValue in attrValue do
+				for _attrType, attrTrueValue in attrValue do
 					instance:SetAttribute(attrName, attrTrueValue)
 				end
 			end
@@ -217,7 +221,7 @@ function Tree.addInstanceProperties(
 			if type(propValue) == "table" then
 				if propertyInfo.Datatype == "Ref" then
 					-- workaround: store as an attribute with a path then resolve later
-					local refResolvingPath: string = Tree.getDataTypeFromPropertyValue(propValue)
+					local refResolvingPath: string = Tree.getDataTypeFromPropertyValue(propValue) :: string
 					local refPathAttrName = Tree.getRefPathAttrName(propName)
 					instance:SetAttribute(refPathAttrName, refResolvingPath)
 				else
@@ -254,7 +258,7 @@ function Tree.resolvePropertyRefs(
 				end
 				instance:SetAttribute(refPathAttrName, nil) -- clean up
 			else
-				Util.warn("No reference attribute found for property:", propName)
+				Util.warn("No reference attribute found for property:", propName, refPathAttrName)
 			end
 		end
 	end
@@ -316,15 +320,47 @@ function Tree.constructInstanceTreeFromInstance(
 				children = {}
 			}
 		else
-			return {
-				type = "file",
-				name = instance.Name .. ".meta.json",
-				content = serde.encode("json", {
-					["name"] = instance.Name, --/ in the event it has to be renamed due to invalid chars:
-					["className"] = instance.ClassName,
-					["properties"] = Tree.getInstanceProperties(instance)
-				})
-			}
+			if Config.get("serialiseNonScripts") ~= true then
+				local tracked = {}
+				local class = DB:GetClass(instance.ClassName)
+				if class then
+					for propName, propertyInfo in class.Properties do
+						if propertyInfo.Datatype == "Ref" then
+							local success, refValue = pcall(function()
+								return instance[propName]
+							end)
+							if success and refValue and typeof(refValue) == "Instance" then
+								local refPath = Util.getInstancePath(refValue)
+								local refPathAttrName = Tree.getRefPathAttrName(propName)
+								instance:SetAttribute(refPathAttrName, refPath)
+								tracked[instance] = refPathAttrName
+							end
+						end
+					end
+				end
+				local instances = {instance}
+				local serModel = roblox.serializeModel(instances, true)
+
+				for inst, attrName in tracked do -- cleanup; resolves comp
+					inst:SetAttribute(attrName, nil)
+				end
+
+				return {
+					type = "binaryfile",
+					name = instance.Name .. ".meta.rbxmx",
+					content = serModel
+				}
+			else
+				return {
+					type = "file",
+					name = instance.Name .. ".meta.json",
+					content = serde.encode("json", {
+						["name"] = instance.Name, --/ in the event it has to be renamed due to invalid chars:
+						["className"] = instance.ClassName,
+						["properties"] = Tree.getInstanceProperties(instance)
+					})
+				}
+			end
 		end
 	else
 		local dirChildren = {}
@@ -347,24 +383,120 @@ function Tree.constructInstanceTreeFromInstance(
 				})
 			end
 		elseif instance.ClassName ~= "Folder" then
-			local success, props = pcall(function()
-				return Tree.getInstanceProperties(instance)
-			end)
+			if Config.get("serialiseNonScripts") ~= true then
+				local extracted = {} --/ extract non-binary-files to ser alongside
+				for _, child in children do
+					if SCRIPT_EXTENSIONS[child.ClassName] or child.ClassName == "Folder" then
+						table.insert(extracted, child)
+					end
+				end
 
-			if not success then
-				Util.warn("Failed to get properties for instance: ", instance.Name)
-				props = {}
-			end
+				local tracked = {}
+				local class = DB:GetClass(instance.ClassName)
+				if class then
+					for propName, propertyInfo in class.Properties do
+						if propertyInfo.Datatype == "Ref" then
+							local success, refValue = pcall(function()
+								return instance[propName]
+							end)
+							if success and refValue and typeof(refValue) == "Instance" then
+								local refPath = Util.getInstancePath(refValue)
+								local refPathAttrName = Tree.getRefPathAttrName(propName)
+								instance:SetAttribute(refPathAttrName, refPath)
+								tracked[instance] = refPathAttrName
+							end
+						end
+					end
+				end
+				for _, descendant in instance:GetDescendants() do
+					local descendantIsExtracted = false
+					for _, extractedInstance in extracted do
+						if descendant == extractedInstance or descendant:IsDescendantOf(extractedInstance) then
+							descendantIsExtracted = true
+							break
+						end
+					end
+					if descendantIsExtracted then
+						continue
+					end
 
-			table.insert(dirChildren, {
-				type = "file",
-				name = "init.meta.json",
-				content = serde.encode("json", {
-					["name"] = instance.Name,
-					["className"] = instance.ClassName,
-					["properties"] = props
+					local descClass = DB:GetClass(descendant.ClassName)
+					if descClass then
+						for propName, propertyInfo in descClass.Properties do
+							if propertyInfo.Datatype == "Ref" then
+								local success, refValue = pcall(function()
+									return descendant[propName]
+								end)
+								if success and refValue then
+									local refPath = Util.getInstancePath(refValue)
+									local refPathAttrName = Tree.getRefPathAttrName(propName)
+									descendant:SetAttribute(refPathAttrName, refPath)
+									tracked[descendant] = refPathAttrName
+								end
+							end
+						end
+					end
+				end
+
+				for _, extractedInstance in extracted do
+					extractedInstance.Parent = nil
+				end
+				-- essentially we remove them when we serialise to remove dupes
+				-- and then those are automatically added back upon deserialisation and reserialisation as well
+				local instances = {instance}
+				local serModel = roblox.serializeModel(instances, true)
+
+				for _, extractedInstance in extracted do -- re-fix
+					extractedInstance.Parent = instance
+				end
+
+				for inst, attrName in tracked do -- cleanup; resolves comp
+					inst:SetAttribute(attrName, nil)
+				end
+
+				table.insert(dirChildren, {
+					type = "binaryfile",
+					name = "init.meta.rbxmx",
+					content = serModel
 				})
-			})
+
+				for _, extractedInstance in extracted do
+					local nodeSuccess, node = pcall(function()
+						return Tree.constructInstanceTreeFromInstance(extractedInstance)
+					end)
+					if nodeSuccess then
+						table.insert(dirChildren, node)
+					else
+						Util.warn("Could not construct tree for extracted instance:", extractedInstance.Name)
+						print(node)
+					end
+				end
+
+				return {
+					type = "directory",
+					name = instance.Name,
+					children = dirChildren
+				}
+			else
+				local success, props = pcall(function()
+					return Tree.getInstanceProperties(instance)
+				end)
+
+				if not success then
+					Util.warn("Failed to get properties for instance: ", instance.Name)
+					props = {}
+				end
+
+				table.insert(dirChildren, {
+					type = "file",
+					name = "init.meta.json",
+					content = serde.encode("json", {
+						["name"] = instance.Name,
+						["className"] = instance.ClassName,
+						["properties"] = props
+					})
+				})
+			end
 		end
 
 		for _, child in children do
@@ -436,6 +568,13 @@ function Tree.constructInstanceTreeFromDirectory(
 					content = reMetaJson
 				})
 				continue
+			elseif childPath:find(".meta.rbxmx") then
+				table.insert(dirChildren, {
+					type = "binaryfile",
+					name = childName,
+					content = content
+				})
+				continue
 			else
 				table.insert(dirChildren, {
 					type = "file",
@@ -474,11 +613,13 @@ function Tree.constructInstanceTreeFromDirectory(
 end
 
 function Tree.constructInstanceFromTreeNode(
-	node: TreeNode
+	node: TreeNode,
+	root: Instance?
 ): Instance
 	if node.type == "directory" then
 		local initScriptNode: TreeNode? = nil
 		local initMetaNode: TreeNode? = nil
+		local initBinaryMetaNode: TreeNode? = nil
 		local childrenRef = {}
 		
 		if node.children then
@@ -487,6 +628,8 @@ function Tree.constructInstanceFromTreeNode(
 					initScriptNode = childNode
 				elseif childNode.name == "init.meta.json" then
 					initMetaNode = childNode
+				elseif childNode.name == "init.meta.rbxmx" then
+					initBinaryMetaNode = childNode
 				else
 					table.insert(childrenRef, childNode)
 				end
@@ -499,9 +642,13 @@ function Tree.constructInstanceFromTreeNode(
 				local scriptInstance = roblox.Instance.new(scriptClassName)
 				scriptInstance.Name = node.name
 				scriptInstance.Source = initScriptNode.content or ""
+
+				if not root then
+					root = scriptInstance
+				end
 				
 				for _, childNode in childrenRef do
-					local childInstance = Tree.constructInstanceFromTreeNode(childNode)
+					local childInstance = Tree.constructInstanceFromTreeNode(childNode, root)
 					childInstance.Parent = scriptInstance
 				end
 
@@ -524,22 +671,47 @@ function Tree.constructInstanceFromTreeNode(
 				local name = metaJson["name"] or node.name
 				local instance = roblox.Instance.new(className)
 				instance.Name = name
+
+				if not root then
+					root = instance
+				end
 				
 				local properties = metaJson["properties"] or {}
 				Tree.addInstanceProperties(instance, properties)
 				
 				for _, childNode in childrenRef do
-					local childInstance = Tree.constructInstanceFromTreeNode(childNode)
+					local childInstance = Tree.constructInstanceFromTreeNode(childNode, root)
 					childInstance.Parent = instance
 				end
 				
 				return instance
+			elseif initBinaryMetaNode then
+				local models = roblox.deserializeModel(initBinaryMetaNode.content or "")
+				if #models == 0 then
+					error("Deserialized model is empty for binaryfile node: " .. node.name)
+				end
+				local rootInstance = models[1]
+
+				if not root then
+					root = rootInstance
+				end
+				
+				for _, childNode in childrenRef do
+					local childInstance = Tree.constructInstanceFromTreeNode(childNode, root)
+					childInstance.Parent = rootInstance
+				end
+				
+				return rootInstance
 			else
 				local folder = roblox.Instance.new("Folder")
 				folder.Name = node.name
 
+				if not root then
+					root = folder
+				end
+
 				for _, childNode in childrenRef do
-					local childInstance = Tree.constructInstanceFromTreeNode(childNode)
+					local childInstance = Tree.constructInstanceFromTreeNode(childNode, root)
 					childInstance.Parent = folder
 				end
 				
@@ -553,6 +725,10 @@ function Tree.constructInstanceFromTreeNode(
 			local name = metaJson["name"] or node.name:gsub("%.meta%.json$", "") -- filter for meta
 			local instance = roblox.Instance.new(className)
 			instance.Name = name 
+
+			if not root then
+				root = instance
+			end
 			
 			local properties = metaJson["properties"] or {}
 			Tree.addInstanceProperties(instance, properties)
@@ -574,10 +750,31 @@ function Tree.constructInstanceFromTreeNode(
 				local scriptInstance = roblox.Instance.new(scriptClassName)
 				scriptInstance.Name = node.name:gsub("%..-$", "")
 				scriptInstance.Source = node.content or ""
+
+				if not root then
+					root = scriptInstance
+				end
+
 				return scriptInstance
 			else
 				error("Unknown file type for node: " .. node.name)
 			end
+		end
+	elseif node.type == "binaryfile" then
+		if node.name:find("%.meta%.rbxmx$") then
+			local models = roblox.deserializeModel(node.content or "")
+			if #models == 0 then
+				error("Deserialized model is empty for binaryfile node: " .. node.name)
+			end
+			local rootInstance = models[1]
+
+			if not root then
+				root = rootInstance
+			end
+
+			return rootInstance
+		else
+			error("Unknown binary file type for node: " .. node.name)
 		end
 	else
 		error("Unknown TreeNode type: " .. tostring(node.type))
@@ -615,22 +812,46 @@ function Tree.writeInstanceTreeToFS(
 	end
 
 	if tree.type == "directory" then
-		local dirPath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
-		Util.dprint("Writing: ", dirPath)
-		fs.writeDir(dirPath)
+		local success, err = pcall(function()
+			local dirPath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
+			Util.dprint("Writing: ", dirPath)
+			fs.writeDir(dirPath)
 
-		if tree.children then
-			for _, child in tree.children do
-				Tree.writeInstanceTreeToFS(child, dirPath, false)
+			if tree.children then
+				for _, child in tree.children do
+					Tree.writeInstanceTreeToFS(child, dirPath, false)
+				end
 			end
+		end)
+		if not success then
+			Util.warn("Failed to write directory:", tree.name, "Error:", err)
 		end
 	elseif tree.type == "file" then
-		local filePath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
-		Util.dprint("Writing: ", filePath)
-		if tree.content then
-			fs.writeFile(filePath, tree.content)
-		else
-			Util.warn("File node has no content:", filePath)
+		local success, err = pcall(function()
+			local filePath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
+			Util.dprint("Writing: ", filePath)
+			if tree.content then
+				fs.writeFile(filePath, tree.content)
+			else
+				Util.warn("File node has no content:", filePath)
+			end
+		end)
+		if not success then
+			Util.warn("Failed to write file:", tree.name, "Error:", err)
+		end
+	elseif tree.type == "binaryfile" then
+		local success, err = pcall(function()
+			local filePath = Util.joinPathParts(basePath, Util.safeDirName(tree.name))
+			Util.dprint("Writing: ", filePath)
+			if tree.content then
+				fs.writeFile(filePath, tree.content)
+			else
+				Util.warn("Binary file node has no content:", filePath)
+			end
+		end)
+
+		if not success then
+			Util.warn("Failed to write binary file:", tree.name, "Error:", err)
 		end
 	end
 end

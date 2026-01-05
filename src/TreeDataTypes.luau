@@ -10,24 +10,125 @@ local Util = require("./Util")
 
 --// Types
 
-export type DataTypeHandler<T> = {
-    Ser: (value: any) -> any,
-    Des: (data: any) -> T,
+export type DataTypeHandler<T, M> = {
+    Ser: (value: T) -> M,
+    Des: (data: M) -> T | string,
 }
 
+export type MetaAxes = {
+    Axes: {string},
+}
+
+export type MetaContent = {
+    Content: string,
+}
+
+export type MetaColor3 = {
+    Color3: {number},
+}
+
+export type MetaColorSequence = {
+    keypoints: {{time: number, color: {number}}},
+}
+
+export type MetaCFrame = {
+    CFrame: {
+        position: {number},
+        orientation: {{number}},
+    },
+}
+
+export type MetaFont = {
+    Font: {
+        family: string,
+        weight: string,
+        style: string,
+    },
+}
+
+export type MetaInstance = {
+    Instance: {
+        path: string
+    }
+}
+
+export type MetaUDim = {
+    UDim: {number},
+}
+export type MetaUDim2 = {
+    UDim2: {{number}},
+}
+
+export type MetaVector2 = {
+    Vector2: {number},
+}
+export type MetaVector2int16 = {
+    Vector2int16: {number},
+}
+export type MetaVector3 = {
+    Vector3: {number},
+}
+export type MetaVector3int16 = {
+    Vector3int16: {number},
+}
+
+export type MetaNumberRange = {number}
+export type MetaNumberSequence = {
+    keypoints: {{number}},
+}
+
+export type Serialisable = 
+    Axes |
+    Content |
+    Color3 |
+    ColorSequence |
+    CFrame |
+    Font |
+    Instance |
+    UDim |
+    UDim2 |
+    Vector2 |
+    Vector2int16 |
+    Vector3 |
+    Vector3int16 |
+    NumberRange |
+    NumberSequence |
+    string
+
+export type Deserialisable = 
+    MetaAxes |
+    MetaContent |
+    MetaColor3 |
+    MetaColorSequence |
+    MetaCFrame |
+    MetaFont |
+    MetaInstance |
+    MetaUDim |
+    MetaUDim2 |
+    MetaVector2 |
+    MetaVector2int16 |
+    MetaVector3 |
+    MetaVector3int16 |
+    MetaNumberRange |
+    MetaNumberSequence | 
+    string
+
 export type TreeDataTypesT = {
-    ["Axes"]: DataTypeHandler<Axes>,
-    ["Content"]: DataTypeHandler<Content>,
-    ["Color3"]: DataTypeHandler<Color3>,
-    ["CFrame"]: DataTypeHandler<CFrame>,
-    ["UDim"]: DataTypeHandler<UDim>,
-    ["UDim2"]: DataTypeHandler<UDim2>,
-    ["Vector2"]: DataTypeHandler<Vector2>,
-    ["Vector2int16"]: DataTypeHandler<Vector2int16>,
-    ["Vector3"]: DataTypeHandler<Vector3>,
-    ["Vector3int16"]: DataTypeHandler<Vector3int16>,
-    ["NumberRange"]: DataTypeHandler<NumberRange>,
-    ["NumberSequence"]: DataTypeHandler<NumberSequence>,
+    ["Axes"]: DataTypeHandler<Axes, MetaAxes>,
+    ["Content"]: DataTypeHandler<Content, MetaContent>,
+    ["Color3"]: DataTypeHandler<Color3, MetaColor3>,
+    ["ColorSequence"]: DataTypeHandler<ColorSequence, MetaColorSequence>,
+    ["CFrame"]: DataTypeHandler<CFrame, MetaCFrame>,
+    ["Font"]: DataTypeHandler<Font, MetaFont>,
+    ["Instance"]: DataTypeHandler<Instance, MetaInstance>,
+    ["UDim"]: DataTypeHandler<UDim, MetaUDim>,
+    ["UDim2"]: DataTypeHandler<UDim2, MetaUDim2>,
+    ["Vector2"]: DataTypeHandler<Vector2, MetaVector2>,
+    ["Vector2int16"]: DataTypeHandler<Vector2int16, MetaVector2int16>,
+    ["Vector3"]: DataTypeHandler<Vector3, MetaVector3>,
+    ["Vector3int16"]: DataTypeHandler<Vector3int16, MetaVector3int16>,
+    ["NumberRange"]: DataTypeHandler<NumberRange, MetaNumberRange>,
+    ["NumberSequence"]: DataTypeHandler<NumberSequence, MetaNumberSequence>,
 
     validateAttributeName: (attributeName: string) -> boolean,
 }
@@ -45,8 +146,8 @@ local ATTRIBUTE_NAME_ALLOWED_CHARS = {
 local TreeDataTypes = {}
 
 TreeDataTypes["Axes"] = {
-    Ser = function(value: any): any
-        local axes = value :: Axes
+    Ser = function(value: Axes): MetaAxes
+        local axes = value
         local axesData: {string} = {}
         if axes.X then
             table.insert(axesData, "X")
@@ -61,7 +162,7 @@ TreeDataTypes["Axes"] = {
             Axes = axesData,
         }
     end,
-    Des = function(data: any): Axes
+    Des = function(data: MetaAxes): Axes
         local axesData = data["Axes"] :: {string}
         local x = false
         local y = false
@@ -80,21 +181,21 @@ TreeDataTypes["Axes"] = {
 }
 
 TreeDataTypes["Content"] = {
-    Ser = function(value: any): any
-        local content = value :: Content
+    Ser = function(value: Content): MetaContent
+        local content = value
 		return {
 			Content = content.Uri,
 		}
     end,
-    Des = function(data: any): Content
-        local uri = data["Content"] :: string
+    Des = function(data: MetaContent): Content
+        local uri = data["Content"]
         return roblox.Content.fromUri(uri)
     end,
 }
 
 TreeDataTypes["Color3"] = {
-    Ser = function(value: any): any
-        local color = value :: Color3
+    Ser = function(value: Color3): MetaColor3
+        local color = value
         return {
             Color3 = {
                 color.R,
@@ -103,8 +204,8 @@ TreeDataTypes["Color3"] = {
             }
         }
     end,
-    Des = function(data: any): Color3
-        local colorData = data["Color3"] :: {number}
+    Des = function(data: MetaColor3): Color3
+        local colorData = data["Color3"]
         local r = colorData[1] :: number
         local g = colorData[2] :: number
         local b = colorData[3] :: number
@@ -113,9 +214,12 @@ TreeDataTypes["Color3"] = {
 }
 
 TreeDataTypes["ColorSequence"] = {
-    Ser = function(value: any): any
-        local colorSequence = value :: ColorSequence
-        local keypointsData: {any} = {}
+    Ser = function(value: ColorSequence): MetaColorSequence
+        local colorSequence = value
+        local keypointsData: {{
+            time: number,
+            color: {number},
+        }} = {}
         for _, keypoint in colorSequence.Keypoints do
             table.insert(keypointsData, {
                 time = keypoint.Time,
@@ -126,15 +230,15 @@ TreeDataTypes["ColorSequence"] = {
             keypoints = keypointsData,
         }
     end,
-    Des = function(data: any): ColorSequence
-        local keypointsData = data["keypoints"] :: {any}
+    Des = function(data: MetaColorSequence): ColorSequence
+        local keypointsData = data["keypoints"]
         local keypoints: {ColorSequenceKeypoint} = {}
         for _, keypointData in keypointsData do
-            local time = keypointData["time"] :: number
-            local valueData = keypointData["color"] :: {number}
-            local r = valueData[1] :: number
-            local g = valueData[2] :: number
-            local b = valueData[3] :: number
+            local time = keypointData["time"]
+            local colorData = keypointData["color"]
+            local r = colorData[1] :: number
+            local g = colorData[2] :: number
+            local b = colorData[3] :: number
             local value = roblox.Color3.new(r, g, b)
             table.insert(keypoints, roblox.ColorSequenceKeypoint.new(time, value))
         end
@@ -143,8 +247,8 @@ TreeDataTypes["ColorSequence"] = {
 }
 
 TreeDataTypes["CFrame"] = {
-    Ser = function(value: any): any
-        local cframe = value :: CFrame
+    Ser = function(value: CFrame): MetaCFrame
+        local cframe = value
         local data = {} :: {
             position: {number},
             orientation: {{number}},
@@ -159,10 +263,10 @@ TreeDataTypes["CFrame"] = {
             CFrame = data
         }
     end,
-    Des = function(data: any): CFrame
-        local cframeData = data["CFrame"] :: {number}
-        local positionData = cframeData.position :: {number}
-        local orientationData = cframeData.orientation :: {{number}}
+    Des = function(data: MetaCFrame): CFrame
+        local cframeData = data["CFrame"]
+        local positionData = cframeData.position
+        local orientationData = cframeData.orientation
         local x = positionData[1] :: number
         local y = positionData[2] :: number
         local z = positionData[3] :: number
@@ -185,8 +289,8 @@ TreeDataTypes["CFrame"] = {
 }
 
 TreeDataTypes["Font"] = {
-    Ser = function(value: any): any
-        local font = value :: Font
+    Ser = function(value: Font): MetaFont
+        local font = value
         return {
             Font = {
                 family = font.Family,
@@ -195,11 +299,11 @@ TreeDataTypes["Font"] = {
             }
         }
     end,
-    Des = function(data: any): Font
-        local fontData = data["Font"] :: any
-        local family = fontData["family"] :: string
-        local weightName = fontData["weight"] :: string
-        local styleName = fontData["style"] :: string
+    Des = function(data: MetaFont): Font
+        local fontData = data["Font"]
+        local family = fontData["family"]
+        local weightName = fontData["weight"]
+        local styleName = fontData["style"]
 
         local weight = roblox.Enum.FontWeight[weightName] :: Enum.FontWeight
         local style = roblox.Enum.FontStyle[styleName] :: Enum.FontStyle
@@ -213,18 +317,16 @@ TreeDataTypes["Font"] = {
 }
 
 TreeDataTypes["Instance"] = {
-    Ser = function(value: any): any
-        local instance = value :: Instance
-        Util.warn("Instance reference serialisation is not supported.")
+    Ser = function(value: Instance): MetaInstance -- ref
+        local instance = value
+        -- Util.warn("Instance reference serialisation is not supported.")
         return {
             Instance = {
-                className = instance.ClassName,
-                name = instance.Name,
                 path = Util.getInstancePath(instance),
             }
         }
     end,
-    Des = function(data: any): string
+    Des = function(data: MetaInstance): string
         local instanceData = data["Instance"] :: any
         local resolvePath = instanceData["path"] :: string
         return resolvePath
@@ -232,8 +334,8 @@ TreeDataTypes["Instance"] = {
 }
 
 TreeDataTypes["UDim"] = {
-    Ser = function(value: any): any
-        local udim = value :: UDim
+    Ser = function(value: UDim): MetaUDim
+        local udim = value
         return {
             UDim = {
                 udim.Scale,
@@ -241,17 +343,17 @@ TreeDataTypes["UDim"] = {
             }
         }
     end,
-    Des = function(data: any): UDim
-        local udimData = data["UDim"] :: {number}
-        local scale = udimData[1] :: number
-        local offset = udimData[2] :: number
+    Des = function(data: MetaUDim): UDim
+        local udimData = data["UDim"]
+        local scale = udimData[1]
+        local offset = udimData[2]
         return roblox.UDim.new(scale, offset)
     end,
 }
 
 TreeDataTypes["UDim2"] = {
-    Ser = function(value: any): any
-        local udim2 = value :: UDim2
+    Ser = function(value: UDim2): MetaUDim2
+        local udim2 = value
         return {
             UDim2 = {
                 {
@@ -265,14 +367,15 @@ TreeDataTypes["UDim2"] = {
             }
         }
     end,
-    Des = function(data: any): UDim2
-        local udim2Data = data["UDim2"] :: {{number}}
-        local xData = udim2Data[1] :: {number}
-        local yData = udim2Data[2] :: {number}
-        local xScale = xData[1] :: number
-        local xOffset = xData[2] :: number
-        local yScale = yData[1] :: number
-        local yOffset = yData[2] :: number
+    Des = function(data: MetaUDim2): UDim2
+        local udim2Data = data["UDim2"]
+        local xData = udim2Data[1]
+        local yData = udim2Data[2]
+
+        local xScale = xData[1]
+        local xOffset = xData[2]
+        local yScale = yData[1]
+        local yOffset = yData[2]
         return roblox.UDim2.new(
             roblox.UDim.new(xScale, xOffset),
             roblox.UDim.new(yScale, yOffset)
@@ -281,8 +384,8 @@ TreeDataTypes["UDim2"] = {
 }
 
 TreeDataTypes["Vector2"] = {
-    Ser = function(value: any): any
-        local vector = value :: Vector2
+    Ser = function(value: Vector2): MetaVector2
+        local vector = value
         return {
             Vector2 = {
                 vector.X,
@@ -290,17 +393,17 @@ TreeDataTypes["Vector2"] = {
             }
         }
     end,
-    Des = function(data: any): Vector2
-        local vectorData = data["Vector2"] :: {number}
-        local x = vectorData[1] :: number
-        local y = vectorData[2] :: number
+    Des = function(data: MetaVector2): Vector2
+        local vectorData = data["Vector2"]
+        local x = vectorData[1]
+        local y = vectorData[2]
         return roblox.Vector2.new(x, y)
     end,
 }
 
 TreeDataTypes["Vector2int16"] = {
-    Ser = function(value: any): any
-        local vector = value :: Vector2int16
+    Ser = function(value: Vector2int16): MetaVector2int16
+        local vector = value
         return {
             Vector2int16 = {
                 vector.X,
@@ -308,17 +411,17 @@ TreeDataTypes["Vector2int16"] = {
             }
         }
     end,
-    Des = function(data: any): Vector2int16
-        local vectorData = data["Vector2int16"] :: {number}
-        local x = vectorData[1] :: number
-        local y = vectorData[2] :: number
+    Des = function(data: MetaVector2int16): Vector2int16
+        local vectorData = data["Vector2int16"]
+        local x = vectorData[1]
+        local y = vectorData[2]
         return roblox.Vector2int16.new(x, y)
     end,
 }
 
 TreeDataTypes["Vector3"] = {
-    Ser = function(value: any): any
-        local vector = value :: Vector3
+    Ser = function(value: Vector3): MetaVector3
+        local vector = value
         return {
             Vector3 = {
                 vector.X,
@@ -327,18 +430,18 @@ TreeDataTypes["Vector3"] = {
             }
         }
     end,
-    Des = function(data: any): Vector3
-        local vectorData = data["Vector3"] :: {number}
-        local x = vectorData[1] :: number
-        local y = vectorData[2] :: number
-        local z = vectorData[3] :: number
+    Des = function(data: MetaVector3): Vector3
+        local vectorData = data["Vector3"]
+        local x = vectorData[1]
+        local y = vectorData[2]
+        local z = vectorData[3]
         return roblox.Vector3.new(x, y, z)
     end,
 }
 
 TreeDataTypes["Vector3int16"] = {
-    Ser = function(value: any): any
-        local vector = value :: Vector3int16
+    Ser = function(value: Vector3int16): any
+        local vector = value
         return {
             Vector3int16 = {
                 vector.X,
@@ -347,34 +450,34 @@ TreeDataTypes["Vector3int16"] = {
             }
         }
     end,
-    Des = function(data: any): Vector3int16
+    Des = function(data: MetaVector3int16): Vector3int16
         local vectorData = data["Vector3int16"] :: {number}
-        local x = vectorData[1] :: number
-        local y = vectorData[2] :: number
-        local z = vectorData[3] :: number
+        local x = vectorData[1]
+        local y = vectorData[2]
+        local z = vectorData[3]
         return roblox.Vector3int16.new(x, y, z)
     end,
 }
 
 TreeDataTypes["NumberRange"] = {
-    Ser = function(value: any): any
-        local numberRange = value :: NumberRange
+    Ser = function(value: NumberRange): MetaNumberRange
+        local numberRange = value
         return {
             numberRange.Min,
             numberRange.Max,
         }
     end,
-    Des = function(data: any): NumberRange
-        local min = data[1] :: number
-        local max = data[2] :: number
+    Des = function(data: MetaNumberRange): NumberRange
+        local min = data[1]
+        local max = data[2]
         return roblox.NumberRange.new(min, max)
     end,
 }
 
 TreeDataTypes["NumberSequence"] = {
-    Ser = function(value: any): any
-        local numberSequence = value :: NumberSequence
-        local keypointsData: {any} = {}
+    Ser = function(value: NumberSequence): MetaNumberSequence
+        local numberSequence = value
+        local keypointsData: {{number}} = {}
         for _, keypoint in numberSequence.Keypoints do
             table.insert(keypointsData, {
                 keypoint.Time,
@@ -386,13 +489,13 @@ TreeDataTypes["NumberSequence"] = {
             keypoints = keypointsData,
         }
     end,
-    Des = function(data: any): NumberSequence
-        local keypointsData = data["keypoints"] :: {any}
+    Des = function(data: MetaNumberSequence): NumberSequence
+        local keypointsData = data["keypoints"]
         local keypoints: {NumberSequenceKeypoint} = {}
         for _, keypointData in keypointsData do
-            local time = keypointData[1] :: number
-            local value = keypointData[2] :: number
-            local envelope = keypointData[3] :: number
+            local time = keypointData[1]
+            local value = keypointData[2]
+            local envelope = keypointData[3]
             table.insert(keypoints, roblox.NumberSequenceKeypoint.new(time, value, envelope))
         end
         return roblox.NumberSequence.new(keypoints)
