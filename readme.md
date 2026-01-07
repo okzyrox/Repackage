@@ -122,7 +122,7 @@ So that when you work with rojo, you can do something like this when handling pa
     - [x] All
     - [ ] Specified
     - [ ] Package revision notes
-      - i dont think this can be set via the API, might also be client only but i have no idea
+      - I dont think this can be set via the API, might also be client only but i have no idea
     - [x] Update local package meta on update
     - [ ] Check if newer version exists; stash changes in some way
         - [ ] Repackage temp folder config
@@ -132,8 +132,8 @@ So that when you work with rojo, you can do something like this when handling pa
 - [ ] Sub packages (packages within packages)
 
 ## Todo - Internal
-- [ ] Add warning when publishing about unresolved Refs if any
-- [ ] Add warning when creating/publishing about sub-packages (unsupported)
+- [x] Add warning when publishing about unresolved Refs if any
+- [x] Add warning when creating/publishing about sub-packages (unsupported)
 
 ## Limitations
 
@@ -146,7 +146,7 @@ Requires a specific structure for packages;
 
 - Cannot handle instance Refs that are outside of the package; will throw a warning if it fails to find one
   - as such, packages that contain references to things outside of the package should not be used.
-  - furthermore, the `info` command will kindly print out every time it fails to find a reference
+  - furthermore, the `info` command will kindly print out every time it fails to find a reference if the `debugUnresolvedRefs` config option is `true`
 
 ## Known issues
 
