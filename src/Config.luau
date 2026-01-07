@@ -16,7 +16,8 @@ export type ConfigOption =
 	"publishAwaitOperation" |
 	"serialiseNonScripts" |
 	"secrets" |
-	"debugLogs"
+	"debugLogs" | 
+	"debugUnresolvedRefs"
 
 export type Config = {
 	[ConfigOption]: any,
@@ -46,6 +47,7 @@ local DEFAULT_CONFIG: Config = {
 	},
 
 	debugLogs = false,
+	debugUnresolvedRefs = false,
 }
 
 --// Vars

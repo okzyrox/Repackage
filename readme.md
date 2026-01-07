@@ -10,6 +10,8 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
 {
   "debugLogs": false, // true / false 
 
+  "debugUnresolvedRefs": false, // true / false
+
   "outputDirectory": "output/", // a folder 
 
   "publishedAwaitOperation": true, // true / false
@@ -31,6 +33,8 @@ Aims to be a utility tool for quickly publishing changes to packages on Roblox r
 
 #### `debugLogs` - `bool`
 Whether or not debug logs in the terminal will be printed
+#### `debugUnresolvedRefs` - `bool`
+Used specifically for debugging unresolved references in a package, where by running the `info` command on a package will allow you to see the list for any unresolved references.
 #### `outputDirectory` - `string`
 The path to the folder where packages will be created/serialised into
 #### `publishedAwaitOperation` - `bool`

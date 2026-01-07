@@ -171,13 +171,30 @@ local function getPackageInfo(
 		print(" Package Revision: N/A")
 	end
 	print(" Root Path: " .. packagePath)
-	local package = Tree.constructPackageFromTree(tree)
-	local totalItems = Util.tableCount(package)
-	local proceed = promptContinue("List the package contents?" .. (" (" .. totalItems .. " items)"))
+	local subpackages = Tree.getDescendantsByClass(tree, "PackageLink")
+	if #subpackages > 0 then
+		Util.warn("Package:", packageName, "contains sub-packages which are not supported.")
+		print(" Sub-packages:")
+		for _, subpackage in subpackages do
+			local content = serde.decode("json", subpackage.content)
+			print("  -", "Package", "(Asset ID:", (content.PackageId or "N/A") .. ")")
+		end
+	end
+
+	local totalItems = Util.tableCount(Tree.getDescendants(tree))
+	local proceed = promptContinue("List the package contents (and any References)" .. (" (" .. totalItems .. " items)"))
 	if not proceed then
 		return
 	end
 
+	local package, refsResolved = Tree.constructPackageFromTree(tree)
+
+	if not refsResolved then
+		local proceedRefs = stdio.prompt("confirm", "View contents?")
+		if not proceedRefs then
+			return
+		end
+	end
 	print(colored("Contents:", "cyan"))
 	for i, packageItem in package do
 		stdio.write("[" .. i .. "]")
@@ -291,7 +308,7 @@ local function savePackage(
 	end
 
 	local tree = Tree.constructInstanceTreeFromDirectory(packagePath)
-	local package = Tree.constructPackageFromTree(tree)
+	local package, refsResolved = Tree.constructPackageFromTree(tree)
 	local rbxmData = roblox.serializeModel(package, false)
 
 	fs.writeFile(cleanOutputFile, rbxmData)

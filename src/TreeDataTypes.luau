@@ -28,7 +28,9 @@ export type MetaColor3 = {
 }
 
 export type MetaColorSequence = {
-    keypoints: {{time: number, color: {number}}},
+    ColorSequence: {
+        keypoints: {{time: number, color: {number}}},
+    }
 }
 
 export type MetaCFrame = {
@@ -72,9 +74,15 @@ export type MetaVector3int16 = {
     Vector3int16: {number},
 }
 
-export type MetaNumberRange = {number}
+export type MetaNumberRange = {
+    NumberRange: {
+        number
+    }
+}
 export type MetaNumberSequence = {
-    keypoints: {{number}},
+    NumberSequence: {
+        keypoints: {{number}},
+    }
 }
 
 export type Serialisable = 
@@ -130,7 +138,11 @@ export type TreeDataTypesT = {
     ["NumberRange"]: DataTypeHandler<NumberRange, MetaNumberRange>,
     ["NumberSequence"]: DataTypeHandler<NumberSequence, MetaNumberSequence>,
 
+    getDataTypePropertyValue: (value: any) -> Deserialisable,
+    getDataTypeFromPropertyValue: (value: any) -> Serialisable,
+
     validateAttributeName: (attributeName: string) -> boolean,
+    getInstancePropertiesExtra: (instance: Instance) -> {[string]: any},
 }
 
 --// Constants
@@ -227,11 +239,14 @@ TreeDataTypes["ColorSequence"] = {
             })
         end
         return {
-            keypoints = keypointsData,
+            ColorSequence = {
+                keypoints = keypointsData,
+            }
         }
     end,
     Des = function(data: MetaColorSequence): ColorSequence
-        local keypointsData = data["keypoints"]
+        local colorSequenceData = data["ColorSequence"]
+        local keypointsData = colorSequenceData["keypoints"]
         local keypoints: {ColorSequenceKeypoint} = {}
         for _, keypointData in keypointsData do
             local time = keypointData["time"]
@@ -463,13 +478,16 @@ TreeDataTypes["NumberRange"] = {
     Ser = function(value: NumberRange): MetaNumberRange
         local numberRange = value
         return {
-            numberRange.Min,
-            numberRange.Max,
+            NumberRange = {
+                numberRange.Min,
+                numberRange.Max,
+            }
         }
     end,
     Des = function(data: MetaNumberRange): NumberRange
-        local min = data[1]
-        local max = data[2]
+        local numberRangeData = data["NumberRange"]
+        local min = numberRangeData[1]
+        local max = numberRangeData[2]
         return roblox.NumberRange.new(min, max)
     end,
 }
@@ -486,11 +504,14 @@ TreeDataTypes["NumberSequence"] = {
             })
         end
         return {
-            keypoints = keypointsData,
+            NumberSequence = {
+                keypoints = keypointsData,
+            }
         }
     end,
     Des = function(data: MetaNumberSequence): NumberSequence
-        local keypointsData = data["keypoints"]
+        local numberSequenceData = data["NumberSequence"]
+        local keypointsData = numberSequenceData["keypoints"]
         local keypoints: {NumberSequenceKeypoint} = {}
         for _, keypointData in keypointsData do
             local time = keypointData[1]
@@ -501,6 +522,37 @@ TreeDataTypes["NumberSequence"] = {
         return roblox.NumberSequence.new(keypoints)
     end,
 }
+
+function TreeDataTypes.getDataTypePropertyValue(
+	value: any
+): Deserialisable
+	local dataType = typeof(value)
+	if TreeDataTypes[dataType] then
+		local serialiser = TreeDataTypes[dataType].Ser
+		return serialiser(value)
+	else
+		Util.warn("No serialiser for data type:", dataType)
+		return tostring(value)
+	end
+end
+
+function TreeDataTypes.getDataTypeFromPropertyValue(
+	value: any
+): Serialisable
+	local dataType = ""
+	for typeName, _ in value do
+		dataType = typeName
+		break
+	end
+
+	if TreeDataTypes[dataType] then
+		local deserialiser = TreeDataTypes[dataType].Des
+		return deserialiser(value)
+	else
+		Util.warn("No deserialiser for data type:", dataType)
+		return tostring(value)
+	end
+end
 
 function TreeDataTypes.validateAttributeName(attributeName: string): boolean
     if Util.stringStartsWith(attributeName, "RBX") then
@@ -537,6 +589,71 @@ function TreeDataTypes.validateAttributeName(attributeName: string): boolean
     end
 
     return true
+end
+
+local MANUAL_PROPERTIES = {
+    --/ ClassName: {PropName: Default}
+}
+
+MANUAL_PROPERTIES["BasePart"] = {
+    Anchored = false,
+    AudioCanCollide = true,
+    CFrame = roblox.CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+    CanCollide = true,
+    CanQuery = true,
+    CanTouch = true,
+    CastShadow = true,
+    CollisionGroup = "Default",
+    Color = roblox.Color3.new(0.6392157, 0.63529414, 0.64705884),
+    EnableFluidForces = true,
+    Locked = false,
+    Massless = false,
+    Material = "Plastic",
+    MaterialVariant = "",
+    PivotOffset = roblox.CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+    Reflectance = 0,
+    RootPriority = 0,
+    Size = roblox.Vector3.new(4, 1.2, 2),
+    Transparency = 0,
+}
+
+MANUAL_PROPERTIES["Tool"] = {
+    CanBeDropped = true,
+    Enabled = true,
+    Grip = roblox.CFrame.new(0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+    ManualActivationOnly = false,
+    RequiresHandle = true,
+    ToolTip = "",
+}
+
+function TreeDataTypes.getInstancePropertiesExtra(instance: Instance): {[string]: any}
+    local properties: {[string]: any} = {}
+
+    for manualPropertyClass, manualProperties in MANUAL_PROPERTIES do
+        if instance:IsA(manualPropertyClass) then
+            for propName, propDefaultValue in manualProperties do
+                local success, value = pcall(function()
+                    return instance[propName]
+                end)
+                if success then
+                    if value ~= propDefaultValue then 
+                        if type(value) == "userdata" then
+                            local dataType = typeof(value)
+                            if dataType == "EnumItem" then
+                                properties[propName] = value.Name
+                            else
+                                properties[propName] = TreeDataTypes.getDataTypePropertyValue(value)
+                            end
+                        else
+                            properties[propName] = value
+                        end
+                    end
+				end
+            end
+        end
+    end
+
+    return properties
 end
 
 return TreeDataTypes :: TreeDataTypesT

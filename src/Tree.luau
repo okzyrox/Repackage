@@ -74,37 +74,6 @@ function Tree.getRefPathAttrName(
 	return REF_PROPERTY_EXT.Prefix .. propName .. REF_PROPERTY_EXT.Suffix
 end
 
-function Tree.getDataTypePropertyValue(
-	value: any
-): TreeDataTypes.Deserialisable
-	local dataType = typeof(value)
-	if TreeDataTypes[dataType] then
-		local serialiser = TreeDataTypes[dataType].Ser
-		return serialiser(value)
-	else
-		Util.warn("No serialiser for data type:", dataType)
-		return tostring(value)
-	end
-end
-
-function Tree.getDataTypeFromPropertyValue(
-	value: any
-): TreeDataTypes.Serialisable
-	local dataType = ""
-	for typeName, _ in value do
-		dataType = typeName
-		break
-	end
-
-	if TreeDataTypes[dataType] then
-		local deserialiser = TreeDataTypes[dataType].Des
-		return deserialiser(value)
-	else
-		Util.warn("No deserialiser for data type:", dataType)
-		return tostring(value)
-	end
-end
-
 function Tree.getAttributePropertyValue(
 	value: any
 ): any?
@@ -123,7 +92,7 @@ function Tree.getAttributePropertyValue(
 			Bool = value
 		}
 	elseif genericType == "userdata" then
-		return Tree.getDataTypePropertyValue(value)
+		return TreeDataTypes.getDataTypePropertyValue(value)
 	else
 		Util.warn("Unknown attribute type:", genericType)
 		return nil
@@ -161,7 +130,7 @@ function Tree.getInstanceProperties(
 								String = refPath
 							}
 						else
-							properties[propInfo.Name] = Tree.getDataTypePropertyValue(value)
+							properties[propInfo.Name] = TreeDataTypes.getDataTypePropertyValue(value)
 						end
 					end
 				else
@@ -169,6 +138,11 @@ function Tree.getInstanceProperties(
 				end
 			end
 		end
+	end
+
+	local extras = TreeDataTypes.getInstancePropertiesExtra(instance)
+	for extraPropName, extraPropValue in extras do
+		properties[extraPropName] = extraPropValue
 	end
 
 	for attrName, attrValue in instance:GetAttributes() do
@@ -221,11 +195,11 @@ function Tree.addInstanceProperties(
 			if type(propValue) == "table" then
 				if propertyInfo.Datatype == "Ref" then
 					-- workaround: store as an attribute with a path then resolve later
-					local refResolvingPath: string = Tree.getDataTypeFromPropertyValue(propValue) :: string
+					local refResolvingPath: string = TreeDataTypes.getDataTypeFromPropertyValue(propValue) :: string
 					local refPathAttrName = Tree.getRefPathAttrName(propName)
 					instance:SetAttribute(refPathAttrName, refResolvingPath)
 				else
-					instance[propName] = Tree.getDataTypeFromPropertyValue(propValue)
+					instance[propName] = TreeDataTypes.getDataTypeFromPropertyValue(propValue)
 				end
 			else
 				instance[propName] = propValue
@@ -236,12 +210,15 @@ end
 
 function Tree.resolvePropertyRefs(
 	instance: Instance,
-	root: Instance
-)
+	root: Instance,
+	warnFail: boolean?
+): boolean -- unresolved
 	local class = DB:GetClass(instance.ClassName)
 	if not class then
 		error("Invalid or unsupported class for instance: " .. instance.ClassName)
 	end
+
+	local hasUnresolvedRefs = false
 
 	for propName, propertyInfo in class.Properties do
 		if propertyInfo.Datatype == "Ref" then
@@ -254,14 +231,21 @@ function Tree.resolvePropertyRefs(
 					Util.info("Resolved reference for property:", propName, "to instance at path:", refPath)
 					instance[propName] = refInstance
 				else
-					Util.warn("Could not resolve reference for property:", propName, "at path:", refPath)
+					if warnFail then
+						Util.warn("Could not resolve reference for property:", propName, "at path:", refPath)
+					end
+					hasUnresolvedRefs = true
 				end
 				instance:SetAttribute(refPathAttrName, nil) -- clean up
 			else
-				Util.warn("No reference attribute found for property:", propName, refPathAttrName)
+				if warnFail then
+					Util.warn("No reference attribute found for property:", propName, refPathAttrName)
+				end
+				hasUnresolvedRefs = true
 			end
 		end
 	end
+	return hasUnresolvedRefs
 end
 
 function Tree.constructInstanceTreeFromInstance(
@@ -320,6 +304,9 @@ function Tree.constructInstanceTreeFromInstance(
 				children = {}
 			}
 		else
+			if instance.ClassName == "PackageLink" then 
+				Util.warn("Packages with Packages via PackageLink are not supported for publishing. Subpackage: ", instance.Parent and instance.Parent.Name or instance.Name)
+			end
 			if Config.get("serialiseNonScripts") ~= true then
 				local tracked = {}
 				local class = DB:GetClass(instance.ClassName)
@@ -383,6 +370,9 @@ function Tree.constructInstanceTreeFromInstance(
 				})
 			end
 		elseif instance.ClassName ~= "Folder" then
+			if instance.ClassName == "PackageLink" then 
+				Util.warn("Packages with Packages via PackageLink are not supported for publishing. Subpackage: ", instance.Parent and instance.Parent.Name or instance.Name)
+			end
 			if Config.get("serialiseNonScripts") ~= true then
 				local extracted = {} --/ extract non-binary-files to ser alongside
 				for _, child in children do
@@ -781,14 +771,27 @@ function Tree.constructInstanceFromTreeNode(
 	end
 end
 
-function Tree.resolveRootPropertyRefs(root: Instance)
+function Tree.resolveRootPropertyRefs(root: Instance): boolean
+	local shouldWarn = Config.get("debugUnresolvedRefs") == true
+	local hasUnresolved = false
     local function resolveRec(instance: Instance)
-        Tree.resolvePropertyRefs(instance, root)
+        local unresolved = Tree.resolvePropertyRefs(instance, root, shouldWarn)
+		if unresolved then
+			hasUnresolved = true
+		end
         for _, child in instance:GetChildren() do
             resolveRec(child)
         end
     end
     resolveRec(root)
+
+	if hasUnresolved == true then
+		Util.warn("Some property references could not be resolved in the instance tree.")
+		Util.warn("This will result in broken references when packaging and publishing.")
+		Util.warn("Consider moving references into the package, otherwise they will remain broken.")
+	end
+
+	return hasUnresolved == false
 end
 
 function Tree.writeInstanceTreeToFS(
@@ -858,7 +861,7 @@ end
 
 function Tree.constructPackageFromTree(
 	tree: TreeNode
-): {Instance}
+): ({Instance}, boolean)
 	local instances: {Instance} = {}
 
 	if tree.type ~= "directory" then
@@ -880,9 +883,114 @@ function Tree.constructPackageFromTree(
 		Util.error("No instances were able to be constructed from tree")
 		error("No instances were able to be constructed from tree")
 	end
-	Tree.resolveRootPropertyRefs(root)
+	local resolvedState = Tree.resolveRootPropertyRefs(root)
 
-	return instances
+	return instances, resolvedState
+end
+
+function Tree.treeNodeContainsClass(
+	node: TreeNode, 
+	className: string
+): (boolean, TreeNode?)
+	if node.type == "file" then
+		if Util.stringEndsWith(node.name, ".meta.json") then
+			local nodeMetaJson = serde.decode("json", node.content or "{}")
+			local nodeClassName = nodeMetaJson["className"] or ""
+			if nodeClassName == className then
+				return true, node
+			end
+		end
+	elseif node.type == "binaryfile" then
+		if Util.stringEndsWith(node.name, ".meta.rbxmx") then
+			local models = roblox.deserializeModel(node.content or "")
+			for _, model: Instance in models do
+				if model.ClassName == className then
+					return true, node
+				end
+
+				local descendants = model:GetDescendants()
+				for _, descendant: Instance in descendants do
+					if descendant.ClassName == className then
+						return true, node
+					end
+				end
+			end
+		end
+	elseif node.type == "directory" and node.children then
+		for _, child in node.children do
+			local contains, foundNode = Tree.treeNodeContainsClass(child, className)
+			if contains then
+				return true, foundNode
+			end
+		end
+	end
+
+	return false, nil
+end
+
+function Tree.getDescendantsByClass(
+	node: TreeNode, 
+	className: string
+): {TreeNode}
+	local classDescendants: {TreeNode} = {}
+
+	if node.type == "file" then
+		if Util.stringEndsWith(node.name, ".meta.json") then
+			local nodeMetaJson = serde.decode("json", node.content or "{}")
+			local nodeClassName = nodeMetaJson["className"] or ""
+			if nodeClassName == className then
+				table.insert(classDescendants, node)
+			end
+		end
+	elseif node.type == "binaryfile" then
+		if Util.stringEndsWith(node.name, ".meta.rbxmx") then
+			local models = roblox.deserializeModel(node.content or "")
+			for _, model: Instance in models do
+				if model.ClassName == className then
+					table.insert(classDescendants, node)
+				end
+
+				local descendants = model:GetDescendants()
+				for _, descendant: Instance in descendants do
+					if descendant.ClassName == className then
+						table.insert(classDescendants, node)
+					end
+				end
+			end
+		end
+	elseif node.type == "directory" and node.children then
+		for _, child in node.children do
+			local childDescendants = Tree.getDescendantsByClass(child, className)
+			for _, foundDescendant in childDescendants do
+				table.insert(classDescendants, foundDescendant)
+			end
+		end
+	end
+
+	return classDescendants
+end
+
+function Tree.getDescendants(
+	node: TreeNode
+): {TreeNode}
+	local descendants: {TreeNode} = {}
+
+	if node.type == "directory" and node.children then
+		for _, child in node.children do
+			if child.type ~= "directory" then
+				if child.name ~= "init.meta.json" then
+					table.insert(descendants, child)
+				end
+			end
+
+			local childDescendants = Tree.getDescendants(child)
+			for _, desc in childDescendants do
+				table.insert(descendants, desc)
+			end
+		end
+	end
+
+	return descendants
 end
 
 function Tree.compareTrees(

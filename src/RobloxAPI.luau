@@ -375,7 +375,14 @@ function RobloxAPI.publishToPackage(
 	end
 
 	local tree = Tree.constructInstanceTreeFromDirectory(packagePath)
-	local package = Tree.constructPackageFromTree(tree)
+	local package, refsResolved = Tree.constructPackageFromTree(tree)
+
+	if not refsResolved then
+		Util.warn("There are unresolved references in the package:", packageName)
+		Util.warn("Please resolve all references before publishing.")
+		Util.warn("(References to instances outside the package cannot be resolved.)")
+		return "FAILED", nil
+	end
 
 	local serializedPackage = roblox.serializeModel(package)
 
