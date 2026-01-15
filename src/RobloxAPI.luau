@@ -342,7 +342,12 @@ function RobloxAPI.getPackageChanges(
 		return false, nil, "None"
 	end
 
-	local _treeCurrentName, treeCurrent = RobloxAPI.getPackageTree(packageAssetId)
+	local _treeCurrentName, treeCurrent = RobloxAPI.getPackageTree(
+		{
+			assetId = tonumber(packageAssetId),
+			assetName = packageName,
+		}
+	)
 	if not treeCurrent then
 		Util.warn("Could not get current package tree for asset:", packageAssetId)
 		return false, nil, "None"

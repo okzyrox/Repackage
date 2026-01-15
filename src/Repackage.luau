@@ -283,7 +283,7 @@ local function getPackageDiff(
 	local anyChanges, changes, state = RobloxAPI.getPackageChanges(packageName)
 
 	if state == "Outdated" then
-		print(formatted("Local package is outdated, update by re-downloading.", "yellow"))
+		print(formatted("Local package is outdated, update by re-downloading.", "yellow", nil, {"bold"}))
 	end
 
 	if state == "None" then
@@ -304,7 +304,7 @@ local function getPackageDiff(
 		end
 
 		if #changes.removed > 0 then
-			print("Removed:")
+			print("Removed / Missing:")
 			for _, removed in changes.removed do
 				print(formatted(" - " .. removed.path, "red"))
 			end
