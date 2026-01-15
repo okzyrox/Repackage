@@ -54,10 +54,46 @@ local function promptContinue(
 	return lowered == "y" or lowered == "yes"
 end
 
+local function getAssetFromString(
+	assetStr: string
+): RobloxAPI.RequestedAsset
+	if assetStr:find("@") then
+		local parts = assetStr:split("@")
+		local assetIdStr = parts[1]
+		local revisionIdStr = parts[2]
+
+		local assetId = tonumber(assetIdStr)
+		local revisionId = tonumber(revisionIdStr)
+
+		if assetId == nil then
+			error("Invalid asset ID: " .. assetIdStr)
+		end
+
+		if revisionId == nil then
+			Util.error("Invalid revision ID: `" .. revisionIdStr .. "`")
+			print("The proper format for asset revisions is: " .. formatted("<assetId>", "yellow") .. formatted("@", "magenta") .. formatted("<revisionId>", "yellow"))
+            print("For example: " .. formatted("12345678900@3", "light_green"))
+			error("")
+		end
+
+		return RobloxAPI.asset(
+			assetId,
+			revisionId
+		)
+	else
+		local assetId = tonumber(assetStr)
+		if assetId == nil then
+			error("Invalid asset ID: " .. assetStr)
+		end
+
+		return RobloxAPI.asset(assetId)
+	end
+end
+
 local function createPackage(
-	assetId: string
+	assetString: string
 )	
-	local asset = RobloxAPI.asset(assetId)
+	local asset = getAssetFromString(assetString)
 	local packageName, tree = RobloxAPI.getPackageTree(asset)
 	if not tree or not packageName then
 		Util.error("Failed to retrieve package tree.")
@@ -84,7 +120,7 @@ local function createPackage(
 	Tree.writeInstanceTreeToFS(tree, outDir, true)
 	fs.writeFile(packageMetaFile, serde.encode("json", tree, true))
 
-	Util.info("Package created at:", packageOutDir)
+	Util.info("Package created at:", packageOutDir, asset.assetRevisionId and formatted(" (Revision: " .. asset.assetRevisionId .. ")", "grey") or "")
 end
 
 local function updateLocalPackage(
@@ -473,8 +509,8 @@ local Commands: {[string]: Command} = {
 	create = {
 		args = {
 			{
-				name = "Package Asset ID",
-				type = "number"
+				name = "Package Asset ID / Package Asset String",
+				type = "string"
 			}
 		},
 		desc = "Create a package onto the filesystem from a package asset",

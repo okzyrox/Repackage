@@ -31,10 +31,6 @@ local URLS: {[string]: URL} = {
 		url = "https://apis.roblox.com/assets/v1/assets/{ASSET_ID}",
 		method = "GET"
 	},
-	GET_META_BY_VERSION = {
-		url = "https://apis.roblox.com/assets/v1/assets/{ASSET_ID}/versions/{VERSION_NUMBER}",
-		method = "GET"
-	},
 	GET_CONTENT = {
 		url = "https://apis.roblox.com/asset-delivery-api/v1/assetId/{ASSET_ID}",
 		method = "GET"
@@ -150,6 +146,9 @@ function API.makeRequest(
 		Util.dprint("Request to URL failed:", url)
 		Util.dprint("Status Code:", response.statusCode)
 		Util.dprint("Response Body:", response.body)
+	else
+		Util.dprint("Request to URL succeeded:", url)
+		Util.dprint("Response Body:", response.body:sub(1, 100) .. ( #response.body > 100 and "..." or "" ))
 	end
 
 	return response.statusCode, response.body

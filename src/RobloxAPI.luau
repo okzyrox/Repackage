@@ -161,10 +161,6 @@ function RobloxAPI.getAssetMeta(
 ): AssetMetadata?
 	local replacements = {ASSET_ID = asset.assetId}
 	local urlData: API.URL = API.URLS.GET_META
-	if asset.assetRevisionId then
-		urlData = API.URLS.GET_META_BY_VERSION
-		replacements["VERSION_NUMBER"] = tostring(asset.assetRevisionId)
-	end
 
 	local statusCode, response = API.makeRequest(
 		urlData,
@@ -177,9 +173,6 @@ function RobloxAPI.getAssetMeta(
 		return jsonResponse
 	else
 		local base = "Failed to get asset meta for assetId: " .. asset.assetId
-		if asset.assetRevisionId then
-			base ..= " with version:" .. asset.assetRevisionId
-		end
 		Util.dprint(base, "Status Code:", statusCode, "Response:", response)
 		return nil
 	end
@@ -286,6 +279,10 @@ function RobloxAPI.getPackageTree(
 	local packageRevisionId: string = meta["revisionId"]
 	local content: ContentResponse? = RobloxAPI.getPackageContent(asset)
 	if content then
+		if asset.assetRevisionId then
+			packageRevisionId = tostring(asset.assetRevisionId)
+		end
+
 		local dataLocation = content["location"]
 		local _statusCode, response = API.makeRequest(
 			{

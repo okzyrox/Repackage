@@ -114,7 +114,7 @@ So that when you work with rojo, you can do something like this when handling pa
 ## Todo
 
 - [x] Generate package map for a given package (asset)
-    - [ ] generate from specific revision
+    - [x] generate from specific revision
         - [x] embed revision ID into package
 - [x] Generate a matching map for a given directory
 - [x] Compare mappings for changes
