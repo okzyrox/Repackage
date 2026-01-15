@@ -16,7 +16,7 @@ local Util = require("./Util")
 local Config = require("./Config")
 local RobloxAPI = require("./RobloxAPI")
 
-local colored = require("./Lib/colored")
+local formatted = require("./Lib/formatted")
 
 --// Types
 
@@ -43,7 +43,7 @@ local COMMAND_LIST_PADDING = 12
 local function promptContinue(
 	message: string
 ): boolean
-	stdio.write(colored(message .. " (y/n): ", "light_yellow"))
+	stdio.write(formatted(message .. " (y/n): ", "light_yellow"))
 	local input = stdio.readLine()
 	local lowered = input:lower()
 	lowered = lowered:gsub("\r", ""):gsub("\n", "")
@@ -56,8 +56,9 @@ end
 
 local function createPackage(
 	assetId: string
-)
-	local packageName, tree = RobloxAPI.getPackageTree(assetId)
+)	
+	local asset = RobloxAPI.asset(assetId)
+	local packageName, tree = RobloxAPI.getPackageTree(asset)
 	if not tree or not packageName then
 		Util.error("Failed to retrieve package tree.")
 		return
@@ -70,9 +71,9 @@ local function createPackage(
 	local packageOutDirExists = RobloxAPI.getLocalPackagePath(packageName)
 	if packageOutDirExists then
 		print(
-			colored("Package already downloaded! If you want to update the local package then use the", "yellow"),
-		 	colored("update", "magenta"),
-		 	colored("command.", "yellow")
+			formatted("Package already downloaded! If you want to update the local package then use the", "yellow"),
+		 	formatted("update", "magenta"),
+		 	formatted("command.", "yellow")
 		)
 		return
 	end
@@ -112,25 +113,27 @@ local function updateLocalPackage(
 	local anyChanges, _changes, _state = RobloxAPI.getPackageChanges(packageName)
 	if anyChanges then
 		print(
-			colored("Local package has modifications, updating will overwrite those changes", "yellow"),
-			colored("if", "yellow", nil, {"bold"}),
-			colored("there is a newer version available.", "yellow")
+			formatted("Local package has modifications, updating will overwrite those changes", "yellow"),
+			formatted("if", "yellow", nil, {"bold"}),
+			formatted("there is a newer version available.", "yellow")
 		)
 		print(
-			colored("You can view the changes via the", "grey"),
-		 	colored("diff", "magenta"),
-		 	colored("command.", "grey")
+			formatted("You can view the changes via the", "grey"),
+		 	formatted("diff", "magenta"),
+		 	formatted("command.", "grey")
 		)
 		local proceed = promptContinue("Do you want to continue with the update?")
 		if not proceed then
-			print(colored("Update cancelled.", "red"))
+			print(formatted("Update cancelled.", "red"))
 			return
 		end
 	end
 
 	local assetId: string = packageData["packageAssetId"]
 	local packageRevisionId: string? = packageData["packageRevisionId"]
-	local packageNameNew, treeNew = RobloxAPI.getPackageTree(assetId)
+	local asset = RobloxAPI.asset(assetId)
+
+	local packageNameNew, treeNew = RobloxAPI.getPackageTree(asset)
 	if not treeNew or not packageNameNew then
 		Util.error("Failed to retrieve updated package tree.")
 		return
@@ -138,13 +141,13 @@ local function updateLocalPackage(
 
 	local newRevisionId: string? = treeNew.packageRevisionId
 	if packageRevisionId == newRevisionId then
-		print(colored("Package is already up to date", "grey"))
+		print(formatted("Package is already up to date", "grey"))
 		return
 	end
 	
 	Tree.writeInstanceTreeToFS(treeNew, outDir, true)
 	fs.writeFile(packageMetaPath, serde.encode("json", treeNew, true))
-	print(colored("Package updated successfully", "green"))
+	print(formatted("Package updated successfully", "green"))
 end
 
 local function getPackageInfo(
@@ -158,7 +161,7 @@ local function getPackageInfo(
 
 	local tree = Tree.constructInstanceTreeFromDirectory(packagePath)
 
-	print(colored("Details:", "green"))
+	print(formatted("Details:", "green"))
 	print(" Package Name: " .. tree.name)
 	if tree.packageAssetId then
 		print(" Package Asset ID: " .. tree.packageAssetId)
@@ -195,7 +198,7 @@ local function getPackageInfo(
 			return
 		end
 	end
-	print(colored("Contents:", "cyan"))
+	print(formatted("Contents:", "cyan"))
 	for i, packageItem in package do
 		stdio.write("[" .. i .. "]")
 		Util.printInstance(packageItem, " ")
@@ -204,14 +207,15 @@ end
 
 local function getPackageRevisions(
 	assetId: string
-)
-	local meta = RobloxAPI.getAssetMeta(assetId)
+)	
+	local asset = RobloxAPI.asset(assetId)
+	local meta = RobloxAPI.getAssetMeta(asset)
 	if not meta then
-		Util.warn("Could not get package meta for asset with ID:", assetId)
+		Util.warn("Could not get package meta for asset with ID:", asset.assetId)
 		return
 	end
 
-	local versionsResponse = RobloxAPI.getPackageVersions(assetId)
+	local versionsResponse = RobloxAPI.getPackageVersions(asset)
 	local assetVersions = {}
 	for _, versionData in versionsResponse["assetVersions"] do
 		local basePath: string = versionData["path"]
@@ -230,9 +234,9 @@ local function getPackageRevisions(
 	print("Latest Revisions for", meta["displayName"])
 	for _, versionInfo in assetVersions do
 		print(
-			colored(" Revision: " .. versionInfo.revisionId, "yellow"),
-			colored("| Date: " .. versionInfo.revisionDate, "grey"),
-			colored(versionInfo.isPublished and "| Published" or "", "green")
+			formatted(" Revision: " .. versionInfo.revisionId, "yellow"),
+			formatted("| Date: " .. versionInfo.revisionDate, "grey"),
+			formatted(versionInfo.isPublished and "| Published" or "", "green")
 		)
 	end
 end
@@ -243,7 +247,7 @@ local function getPackageDiff(
 	local anyChanges, changes, state = RobloxAPI.getPackageChanges(packageName)
 
 	if state == "Outdated" then
-		print(colored("Local package is outdated, update by re-downloading.", "yellow"))
+		print(formatted("Local package is outdated, update by re-downloading.", "yellow"))
 	end
 
 	if state == "None" then
@@ -251,7 +255,7 @@ local function getPackageDiff(
 	end
 
 	if anyChanges == false then
-		print(colored("No changes", "grey"))
+		print(formatted("No changes", "grey"))
 	else
 		if state == "Modified" then
 			print("Local package has been modified.")
@@ -259,28 +263,28 @@ local function getPackageDiff(
 		if #changes.added > 0 then
 			print("Added:")
 			for _, added in changes.added do
-				print(colored(" + " .. added.path, "green"))
+				print(formatted(" + " .. added.path, "green"))
 			end
 		end
 
 		if #changes.removed > 0 then
 			print("Removed:")
 			for _, removed in changes.removed do
-				print(colored(" - " .. removed.path, "red"))
+				print(formatted(" - " .. removed.path, "red"))
 			end
 		end
 
 		if #changes.modified > 0 then
 			print("Modified:")
 			for _, modified in changes.modified do
-				print(colored(" * " .. modified.path, "yellow"))
+				print(formatted(" * " .. modified.path, "yellow"))
 			end
 		end
 
 		if #changes.moved > 0 then
 			print("Moved:")
 			for _, moved in changes.moved do
-				print(colored(" * " .. moved.oldPath, "red") .. " -> " .. colored(moved.newPath, "green"))
+				print(formatted(" * " .. moved.oldPath, "red") .. " -> " .. formatted(moved.newPath, "green"))
 			end
 		end
 	end
@@ -324,7 +328,7 @@ local function publishPackage(
 	elseif publishStatus == "FAILED" then
 		Util.error("Failed to publish package:", packageName)
 	elseif publishStatus == "PENDING" then
-		print(colored("Package publish is pending. Operation ID: " .. tostring(operationId), "yellow"))
+		print(formatted("Package publish is pending. Operation ID: " .. tostring(operationId), "yellow"))
 
 		local shouldWait = Config.getOrDefault("publishAwaitOperation")
 		if not shouldWait then
@@ -336,7 +340,7 @@ local function publishPackage(
 		while true do
 			result = RobloxAPI.checkOperationStatus(operationId)
 			if result == true then
-				print(colored("Package published successfully: " .. packageName, "green"))
+				print(formatted("Package published successfully: " .. packageName, "green"))
 				break
 			elseif result == false then
 				print("Pending...")
@@ -367,7 +371,7 @@ local function publishPackage(
 			)
 
 			if updated then
-				print(colored("Updated package meta to revision: " .. latestRevisionId, "green"))
+				print(formatted("Updated package meta to revision: " .. latestRevisionId, "green"))
 			else
 				Util.warn("Failed to update package meta to new revision:", latestRevisionId)
 			end
@@ -400,14 +404,14 @@ local function setup()
 	elseif secrets.secretsType == "env" then
 		print(
 			"Make sure to set the environment variable:", 
-			colored(secrets.secretsEnvKey or "ROBLOX_API_KEY", "light_green")
+			formatted(secrets.secretsEnvKey or "ROBLOX_API_KEY", "light_green")
 		)
 	end
 
-	print(colored("When creating an API key, ensure it has the following permissions:", "yellow"))
-	print(colored("  - asset:read", "green"))
-	print(colored("  - asset:write", "green"))
-	print(colored("  - legacy-asset:manage", "green"))
+	print(formatted("When creating an API key, ensure it has the following permissions:", "yellow"))
+	print(formatted("  - asset:read", "green"))
+	print(formatted("  - asset:write", "green"))
+	print(formatted("  - legacy-asset:manage", "green"))
 
 	print("Set-up the current working directory for use with Repackage")
 end
@@ -415,18 +419,18 @@ end
 local function showHelp(
 	commands: {[string]: Command}
 )
-	print(colored("Repackage - A Package Manager", "light_cyan", nil, {"bold"}))
-	print(colored("Usage: Repackage <command> [args...]", "light_magenta", nil, {"bold"}))
-	print(colored("Commands:", "light_cyan", nil, {"bold"}))
+	print(formatted("Repackage - A Package Manager", "light_cyan", nil, {"bold"}))
+	print(formatted("Usage: Repackage <command> [args...]", "light_magenta", nil, {"bold"}))
+	print(formatted("Commands:", "light_cyan", nil, {"bold"}))
 	for commandName, commandData in commands do
-		stdio.write("  " .. colored(commandName, "light_green", nil, {"underline"}))
+		stdio.write("  " .. formatted(commandName, "light_green", nil, {"underline"}))
 		if commandData.desc then
 			local i = 0
 			while i < (COMMAND_LIST_PADDING - #commandName) do
 				stdio.write(" ")
 				i += 1
 			end
-			stdio.write(colored(commandData.desc, "light_yellow") .. "\n")
+			stdio.write(formatted(commandData.desc, "light_yellow") .. "\n")
 		else
 			stdio.write("\n")
 		end
@@ -437,15 +441,15 @@ local function showHelpCommand(
 	commandName: string,
 	commandData: Command
 )
-	print(colored("Command: " .. commandName, "light_cyan", nil, {"bold"}))
+	print(formatted("Command: " .. commandName, "light_cyan", nil, {"bold"}))
 	if commandData.desc then
-		print(colored("Description: " .. commandData.desc, "light_yellow"))
+		print(formatted("Description: " .. commandData.desc, "light_yellow"))
 	end
 	if commandData.aliases and #commandData.aliases > 0 then
-		print(colored("Aliases: " .. table.concat(commandData.aliases, ", "), "light_green"))
+		print(formatted("Aliases: " .. table.concat(commandData.aliases, ", "), "light_green"))
 	end
 	if #commandData.args > 0 then
-		print(colored("Arguments:", "light_magenta"))
+		print(formatted("Arguments:", "light_magenta"))
 		for _, argData in commandData.args do
 			local argLine = " - " .. argData.name .. " (" .. argData.type .. ")"
 			if argData.optional == true then
@@ -454,7 +458,7 @@ local function showHelpCommand(
 			if argData.type == "options" and argData.options then
 				argLine ..= " Options: {" .. table.concat(argData.options, ", ") .. "}"
 			end
-			print(colored(argLine, "grey"))
+			print(formatted(argLine, "grey"))
 		end
 	end
 end
@@ -561,7 +565,7 @@ Commands.help = {
 			if commandData then
 				showHelpCommand(commandName, commandData)
 			else
-				print(colored("Unknown command: " .. commandName, "yellow"))
+				print(formatted("Unknown command: " .. commandName, "yellow"))
 			end
 		else
 			showHelp(Commands)
@@ -605,9 +609,9 @@ local function main()
 			local commandArgData = commandData.args[i]
 			if not argValue and commandArgData.optional ~= true then
 				--/ amazing formatting
-				local argMsg = `{colored("Missing argument: ", "yellow")}{colored(commandArgData.name, "light_green")}{colored(" for ", "yellow")}{colored(commandName, "light_magenta")}`
+				local argMsg = `{formatted("Missing argument: ", "yellow")}{formatted(commandArgData.name, "light_green")}{formatted(" for ", "yellow")}{formatted(commandName, "light_magenta")}`
 				if commandArgData.options then
-					argMsg ..= `{colored(" (Options: ", "yellow")}{colored("{" .. table.concat(commandArgData.options, ", ") .. "}", "light_green")}{colored("}", "yellow")}`
+					argMsg ..= `{formatted(" (Options: ", "yellow")}{formatted("{" .. table.concat(commandArgData.options, ", ") .. "}", "light_green")}{formatted("}", "yellow")}`
 				end
 				print(argMsg)
 				return
@@ -630,7 +634,7 @@ local function main()
 					argValue = false
 				else
 					Util.warn("Invalid boolean for argument:", commandArgData.name)
-					print(colored("Expected true or false", "yellow"))
+					print(formatted("Expected true or false", "yellow"))
 					return
 				end
 			elseif commandArgData.type == "options" then
@@ -641,7 +645,7 @@ local function main()
 				if not table.find(commandArgData.options, argValue) then
 					local options = table.concat(commandArgData.options, ", ")
 					Util.warn("Invalid option for argument:", commandArgData.name)
-					print(colored("Expected one of: " .. options, "light_green"))
+					print(formatted("Expected one of: " .. options, "light_green"))
 					return
 				end
 			end

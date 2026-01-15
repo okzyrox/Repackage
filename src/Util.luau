@@ -4,7 +4,7 @@
 --/ Date: 2025/12/18
 
 --// Modules
-local colored = require("./Lib/colored")
+local formatted = require("./Lib/formatted")
 
 --// Types
 export type JsonObject = { [string | number]: JsonNode | string | number | boolean | nil  }
@@ -32,7 +32,7 @@ function Util.dprint(
 	end
 	local str = { ... }
 	local strFmt = "[DEBUG] - " .. table.concat(str, " ")
-	print(colored(strFmt, "cyan"))
+	print(formatted(strFmt, "cyan"))
 end
 
 function Util.info(
@@ -40,7 +40,7 @@ function Util.info(
 )
 	local str = { ... }
 	local strFmt = "[INFO] - " .. table.concat(str, " ")
-	print(colored(strFmt, "green"))
+	print(formatted(strFmt, "green"))
 end
 
 function Util.error(
@@ -48,7 +48,7 @@ function Util.error(
 )
 	local str = { ... }
 	local strFmt = "[ERROR] - " .. table.concat(str, " ")
-	print(colored(strFmt, "red"))
+	print(formatted(strFmt, "red"))
 end
 
 function Util.warn(
@@ -56,7 +56,7 @@ function Util.warn(
 )
 	local str = { ... }
 	local strFmt = "[WARN] - " .. table.concat(str, " ")
-	print(colored(strFmt, "yellow"))
+	print(formatted(strFmt, "yellow"))
 end
 
 function Util.printInstance(
@@ -72,7 +72,7 @@ function Util.printInstance(
 	local connector = last and "└── " or "├── "
 	local connectorExtras = last and "    " or "│   "
 	
-	print(prefix .. connector .. instance.Name .. " (" .. instance.ClassName .. ")")
+	print(prefix .. connector .. instance.Name .. formatted(" (" .. instance.ClassName .. ")", "light_blue", nil, {"italic"}))
 	
 	local extraProps = PrintExtraProperties[instance.ClassName]
 	if extraProps then
@@ -82,7 +82,7 @@ function Util.printInstance(
 			end)
 			if success and value then
 				local pPrefix = indent .. (connectorExtras)
-				print(pPrefix .. "│ " .. propName .. " = " .. tostring(value))
+				print(pPrefix .. formatted("│ " .. propName .. " = " .. formatted(tostring(value), "magenta"), "yellow", nil, {"italic"}))
 			end
 		end
 	end
@@ -90,13 +90,13 @@ function Util.printInstance(
 	local tags = instance:GetTags()
 	if #tags > 0 then
 		local tPrefix = indent .. (connectorExtras)
-		print(tPrefix .. "│ Tags: " .. table.concat(tags, ", "))
+		print(tPrefix .. formatted("│ Tags: " .. formatted(table.concat(tags, ", "), "white", nil, {"underline"}), "light_yellow", nil, {"italic"}))
 	end
 
 	local attributes = instance:GetAttributes()
 	for attrName, attrValue in attributes do
 		local aPrefix = indent .. (connectorExtras)
-		print(aPrefix .. "│ Attribute: " .. attrName .. " = " .. tostring(attrValue))
+		print(aPrefix .. formatted("│ Attribute: " .. formatted(attrName, "light_green", nil, {"underline"}) .. " = " .. formatted(tostring(attrValue), "light_magenta"), "light_green", nil, {"italic"}))
 	end
 
 	local Children = instance:GetChildren()

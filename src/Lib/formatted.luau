@@ -6,6 +6,7 @@
 export type Attribute = 
 	"bold" | 
 	"dark" | 
+	"italic" |
 	"underline" | 
 	"blink" | 
 	"reverse" | 
@@ -15,12 +16,13 @@ export type Attribute =
 local ATTRIBUTES = {
 	bold = 1,
 	dark = 2,
+	italic = 3,
 	underline = 4,
 	blink = 5,
 	reverse = 7,
 	concealed = 8,
 	strike = 9,
-}
+} :: {[Attribute]: number}
 
 export type Hightlight = 
 	"on_black" |
@@ -59,7 +61,7 @@ local HIGHLIGHTS = {
 	on_light_magenta = 105,
 	on_light_cyan = 106,
 	on_white = 107,
-}
+} :: {[Hightlight]: number}
 
 export type Color = 
 	"black" |
@@ -98,11 +100,11 @@ local COLORS = {
 	light_magenta = 95,
 	light_cyan = 96,
 	white = 97,
-}
+} :: {[Color]: number}
 
 local RESET = "\27[0m"
 
-local function colored(text: string, color: Color? | {number}?, on_color: Highlight? | {number}?, attrs: {Attribute}? )
+local function formatted(text: string, color: Color? | {number}?, on_color: Highlight? | {number}?, attrs: {Attribute}? )
 	local result = tostring(text)
 	local fmt = "\27[%dm%s"
 	local rgbFore = "\27[38;2;%d;%d;%dm%s"
@@ -133,4 +135,4 @@ local function colored(text: string, color: Color? | {number}?, on_color: Highli
 	return result .. RESET
 end
 
-return colored
+return formatted

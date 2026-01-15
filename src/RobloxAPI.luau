@@ -111,6 +111,12 @@ export type AssetVersionsResponse = {
 	nextPageToken: string?
 }
 
+export type RequestedAsset = {
+	assetId: number,
+	assetName: string?,
+	assetRevisionId: number?
+}
+
 --// Constants
 local PACKAGE_CONTENT_TYPE = "model/x-rbxm"
 
@@ -118,6 +124,17 @@ local PACKAGE_CONTENT_TYPE = "model/x-rbxm"
 
 local RobloxAPI = {}
 RobloxAPI.PACKAGE_CONTENT_TYPE = PACKAGE_CONTENT_TYPE
+
+function RobloxAPI.asset(
+	assetId: number | string,
+	revisionId: number? | string?
+): RequestedAsset
+	return {
+		assetId = tonumber(assetId),
+		assetName = nil,
+		assetRevisionId = revisionId and tonumber(revisionId) or nil,
+	}
+end
 
 function RobloxAPI.getLocalPackagePath(
 	packageName: string
@@ -140,14 +157,13 @@ end
 
 --/ Get Asset Meta
 function RobloxAPI.getAssetMeta(
-    assetId: string, 
-    versionId: string?
+    asset: RequestedAsset
 ): AssetMetadata?
-	local replacements = {ASSET_ID = assetId}
+	local replacements = {ASSET_ID = asset.assetId}
 	local urlData: API.URL = API.URLS.GET_META
-	if versionId then
+	if asset.assetRevisionId then
 		urlData = API.URLS.GET_META_BY_VERSION
-		replacements["VERSION_NUMBER"] = tostring(versionId)
+		replacements["VERSION_NUMBER"] = tostring(asset.assetRevisionId)
 	end
 
 	local statusCode, response = API.makeRequest(
@@ -160,9 +176,9 @@ function RobloxAPI.getAssetMeta(
 	if statusCode == 200 then
 		return jsonResponse
 	else
-		local base = "Failed to get asset meta for assetId: " .. assetId
-		if versionId then
-			base ..= " with version:" .. versionId
+		local base = "Failed to get asset meta for assetId: " .. asset.assetId
+		if asset.assetRevisionId then
+			base ..= " with version:" .. asset.assetRevisionId
 		end
 		Util.dprint(base, "Status Code:", statusCode, "Response:", response)
 		return nil
@@ -196,20 +212,23 @@ function RobloxAPI.getPackageMeta(
 		Util.warn("Malformed package meta, missing package asset id:", packageName)
 		return nil
 	end
-	return RobloxAPI.getAssetMeta(assetId, versionId)
+	return RobloxAPI.getAssetMeta({
+		assetId = tonumber(assetId),
+		assetName = packageName,
+		assetRevisionId = versionId and tonumber(versionId) or nil,
+	})
 end
 
 --/ Get Package Content Data 
 function RobloxAPI.getPackageContent(
-    assetId: string, 
-    versionId: string?
+    asset: RequestedAsset
 ): ContentResponse?
 	local urlData: API.URL
-	local replacements = {ASSET_ID = assetId}
+	local replacements = {ASSET_ID = asset.assetId}
 
-	if versionId then
+	if asset.assetRevisionId then
 		urlData = API.URLS.GET_CONTENT_BY_VERSION
-		replacements["VERSION_NUMBER"] = tostring(versionId)
+		replacements["VERSION_NUMBER"] = tostring(asset.assetRevisionId)
 	else
 		urlData = API.URLS.GET_CONTENT
 	end
@@ -230,18 +249,18 @@ function RobloxAPI.getPackageContent(
 
 		return jsonResponse
 	else
-		print("Failed to get package content for assetId:", assetId, "Status Code:", statusCode, "Response:", response)
+		print("Failed to get package content for assetId:", asset.assetId, "Status Code:", statusCode, "Response:", response)
 		return nil
 	end
 end
 
 --/ Get versions of an asset
 function RobloxAPI.getPackageVersions(
-    assetId: string
+    asset: RequestedAsset
 ): AssetVersionsResponse?
 	local statusCode, response = API.makeRequest(
 		API.URLS.GET_VERSIONS,
-		{ASSET_ID = assetId},
+		{ASSET_ID = asset.assetId},
 		nil
 	)
 
@@ -249,24 +268,23 @@ function RobloxAPI.getPackageVersions(
 	if statusCode == 200 then
 		return jsonResponse
 	else
-		Util.dprint("Failed to get package versions for assetId:", assetId, "Status Code:", statusCode, "Response:", response)
+		Util.dprint("Failed to get package versions for assetId:", asset.assetId, "Status Code:", statusCode, "Response:", response)
 		return nil
 	end
 end
 
 --/ Get the TreeNodes of a package asset
 function RobloxAPI.getPackageTree(
-    assetId: string, 
-    versionId: string?
+    asset: RequestedAsset
 ): (string?, Tree.TreeNode?)
-	local meta = RobloxAPI.getAssetMeta(assetId, versionId)
+	local meta = RobloxAPI.getAssetMeta(asset)
 	if not meta then
-		Util.warn("Could not get package meta for asset with ID:", assetId)
+		Util.warn("Could not get package meta for asset with ID:", asset.assetId)
 		return nil
 	end
 	local packageName: string = meta["displayName"]
 	local packageRevisionId: string = meta["revisionId"]
-	local content: ContentResponse? = RobloxAPI.getPackageContent(assetId, versionId)
+	local content: ContentResponse? = RobloxAPI.getPackageContent(asset)
 	if content then
 		local dataLocation = content["location"]
 		local _statusCode, response = API.makeRequest(
@@ -285,17 +303,17 @@ function RobloxAPI.getPackageTree(
 		end)
 
 		if not success then
-			Util.warn("Unable to deserialize package: ", assetId)
+			Util.warn("Unable to deserialize package: ", asset.assetId)
 			return nil
 		end
 		
 		if #deserializedPackage == 0 then
-			print("No instances found in the package content for assetId:", assetId)
+			print("No instances found in the package content for assetId:", asset.assetId)
 			return nil
 		end
 
 		local treeSuccess, tree = pcall(function()
-			return Tree.constructInstanceTreeFromInstance(deserializedPackage, packageName, assetId, packageRevisionId)
+			return Tree.constructInstanceTreeFromInstance(deserializedPackage, packageName, tostring(asset.assetId), packageRevisionId)
 		end)
 
 		if not treeSuccess then 
