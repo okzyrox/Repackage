@@ -2,6 +2,9 @@
 
 Experimental tool that aims to allow you to quickly publish changes to packages on Roblox corresponding to a given directory of files and associated package file
 
+> [!WARNING]
+> Currently unusable due to internal updates to the format of RBXM's, which has resulted in the deserialiser built into [Lune](https://github.com/lune-org/lune) to crash when loading package information. Sorry!
+
 ## Installation
 
 The easiest way to install Repackage is if you are using [Rokit](https://github.com/rojo-rbx/rokit) in your project, where you can easily just add the following toolchain:
