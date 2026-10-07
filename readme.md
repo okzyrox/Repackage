@@ -8,6 +8,7 @@ Experimental tool that aims to allow you to quickly publish changes to packages 
 ## Installation
 
 The easiest way to install Repackage is if you are using [Rokit](https://github.com/rojo-rbx/rokit) in your project, where you can easily just add the following toolchain:
+
 ```toml
 repackage = "okzyrox/repackage@VERSION
 ```
@@ -18,6 +19,7 @@ The `VERSION` refers to the latest version if you want, or whichever release you
 <summary> <code>repackage.config.json</code> explanation </summary>
 
 ## Repackage Config
+
 ```jsonc
 {
   "debugLogs": false, // true / false 
@@ -42,7 +44,6 @@ The `VERSION` refers to the latest version if you want, or whichever release you
   }
 }
 ```
-
 #### `debugLogs` - `bool`
 Whether or not debug logs in the terminal will be printed
 #### `debugUnresolvedRefs` - `bool`
@@ -75,6 +76,7 @@ Repackage isn't technically designed to work 100% with Rojo, however you can sti
 Here are my recommendations:
 
 ### 1. Repackage Config
+
 ```jsonc
 {
   // ...
@@ -85,9 +87,13 @@ Here are my recommendations:
 
 ### 2. Rojo Config
 So that when you work with rojo, you can do something like this when handling packages in Rojo where:
+
 - Each package is given it's own file in the workspace correlating to where it should be
+
 - The sourcemap can generate accurate mappings to your packages
+
 - You can add other files seperately in your "src/" directory or wherever else you may have it
+
 ```jsonc
 {
   // ...

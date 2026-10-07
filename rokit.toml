@@ -4,5 +4,5 @@
 # New tools can be added by running `rokit add <tool>` in a terminal.
 
 [tools]
-lune = "lune-org/lune@0.10.4"
+lune = "lune-org/lune@0.10.5"
 darklua = "seaofvoices/darklua@0.17.3"

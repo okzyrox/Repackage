@@ -337,12 +337,12 @@ function RobloxAPI.getPackageTree(
 		end)
 
 		if not success then
-			Util.warn("Unable to deserialize package: ", asset.assetId)
+			Util.warn(`Failed to deserialize package with id {asset.assetId}. Deserialisation Error: {deserializedPackage}`)
 			return nil
 		end
 		
 		if #deserializedPackage == 0 then
-			print("No instances found in the package content for assetId:", asset.assetId)
+			print(`This package ({asset.assetId}) does not contain any instances inside it!`)
 			return nil
 		end
 
@@ -351,7 +351,7 @@ function RobloxAPI.getPackageTree(
 		end)
 
 		if not treeSuccess then 
-			Util.warn("Could not construct instance tree for package:", meta["displayName"])
+			Util.warn(`Failed to construct an instance tree for package with name {meta['displayName']}. Tree Error: {tree}`)
 			-- print(tree)
 			return nil
 		end
@@ -392,7 +392,7 @@ function RobloxAPI.getPackageChanges(
 
 	local state: Tree.TreeState = "Unchanged"
 
-	local changes = Tree.compareTrees(treeCurrent, treeNew)
+	local changes = Tree.compareTrees(treeNew, treeCurrent)
 	if changes.anyChanges == false then
 		if tonumber(treeCurrent.packageRevisionId) > tonumber(treeNew.packageRevisionId) then
 			state = "Outdated"

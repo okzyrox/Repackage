@@ -274,7 +274,7 @@ function Tree.constructInstanceTreeFromInstance(
 						table.insert(children, tree)
 					else
 						Util.warn("Could not construct instance tree for instance:", inst.Name)
-						print(tree)
+						Util.dprint(tree)
 					end
 				end
 				return children
@@ -372,7 +372,7 @@ function Tree.constructInstanceTreeFromInstance(
 			end
 		elseif instance.ClassName ~= "Folder" then
 			if instance.ClassName == "PackageLink" then 
-				Util.warn("Packages with Packages via PackageLink are not supported for publishing. Subpackage: ", instance.Parent and instance.Parent.Name or instance.Name)
+				Util.warn("Packages within Packages via PackageLink are not supported for publishing. Subpackage: ", instance.Parent and instance.Parent.Name or instance.Name)
 			end
 			if Config.get("serialiseNonScripts") ~= true then
 				local extracted = {} --/ extract non-binary-files to ser alongside
@@ -459,7 +459,7 @@ function Tree.constructInstanceTreeFromInstance(
 						table.insert(dirChildren, node)
 					else
 						Util.warn("Could not construct tree for extracted instance:", extractedInstance.Name)
-						print(node)
+						Util.dprint(node)
 					end
 				end
 
@@ -495,8 +495,8 @@ function Tree.constructInstanceTreeFromInstance(
 				return Tree.constructInstanceTreeFromInstance(child)
 			end)
 			if not nodeSuccess then
-				print("Could not construct instance tree for child:", child.Name, child.ClassName)
-				print(node)
+				Util.warn("Could not construct instance tree for child:", child.Name, child.ClassName)
+				Util.dprint(node)
 				continue
 			end
 			table.insert(dirChildren, node)
